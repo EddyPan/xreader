@@ -1,0 +1,640 @@
+/* ========== 全局 ========== */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* 禁止 body 滚动 */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: #f9f9f9;
+  color: #222;
+  line-height: 1.6;
+}
+
+h1 {
+  font-size: 1.2rem;
+  margin: 0;
+}
+
+/* 统一按钮基础样式 */
+button, .file-pill {
+  font: inherit;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button:hover, .file-pill:hover {
+  background: #f0f0f0;
+}
+button.ghost {
+  background: transparent;
+  border: 1px solid #bbb;
+}
+button.ghost:hover {
+  background: #eee;
+}
+
+/* ========== 外层容器 ========== */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* 占满屏幕 */
+}
+
+/* ========== 顶部栏 ========== */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ddd;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+header .controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* ========== 拖拽区 ========== */
+.dropzone {
+  border: 2px dashed #bbb;
+  padding: 40px;
+  text-align: center;
+  margin: 20px;
+  border-radius: 12px;
+  background: #fafafa;
+  color: #666;
+  flex: 1; /* 占满剩余高度，居中提示 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dropzone.dragover {
+  border-color: #007bff;
+  background: #eef6ff;
+}
+
+/* ========== 阅读器 ========== */
+.reader-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;          /* 占满剩余空间 */
+  overflow: hidden; /* 自身不滚动 */
+}
+.reader-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+}
+.reader-header .title {
+  font-size: 1rem;
+  font-weight: bold;
+}
+.reader-header .small {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* 朗读控制 */
+.speech-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.speech-controls input[type=range] {
+  vertical-align: middle;
+}
+
+/* 音频控制元素默认隐藏，点击朗读按钮后显示 */
+.audio-rate,
+.audio-filter,
+.audio-select {
+  display: none;
+}
+
+/* 朗读状态显示音频控制 */
+.speaking .audio-rate,
+.speaking .audio-filter,
+.speaking .audio-select {
+  display: inline-block;
+}
+
+/* 朗读按钮状态样式 */
+#btnSpeak.speaking {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+#btnSpeak.speaking:hover {
+  background: #0056b3;
+}
+
+/* ========== 文字区（唯一滚动区） ========== */
+.viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  font-size: 1rem;
+  line-height: 1.8;
+  background: #fff;
+}
+.viewport p {
+  margin: 0 0 1em;
+  transition: background 0.3s;
+}
+.viewport p.speaking-paragraph {
+  background: #e3f2fd;
+  border-left: 3px solid #2196f3;
+  padding-left: 12px;
+  margin-left: -12px;
+}
+
+/* 段落可点击提示 */
+.viewport p {
+  cursor: pointer;
+  transition: background 0.3s, border-left 0.3s;
+}
+
+.viewport p:hover {
+  background: #f5f5f5;
+}
+
+/* ========== 页码控制 ========== */
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-top: 1px solid #eee;
+  background: #fafafa;
+}
+.pager .small {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+/* ========== 书籍列表 ========== */
+/* 遮罩层 */
+.book-list-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.book-list-overlay.show {
+  display: block;
+  opacity: 1;
+}
+
+/* 阅读列表容器 */
+.book-list-container {
+  position: fixed;
+  top: 0;
+  left: -300px;
+  width: 300px;
+  height: 100%;
+  background: #fff;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition: left 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.book-list-container.show {
+  left: 0;
+}
+
+/* 阅读列表头部 */
+.book-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  background: #f8f9fa;
+}
+
+.book-list-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+/* 书籍列表内容 */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+/* 书籍列表项样式优化 */
+.book-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+  animation: slideInItem 0.3s ease forwards;
+  opacity: 0;
+}
+
+.book-item:nth-child(1) { animation-delay: 0.05s; }
+.book-item:nth-child(2) { animation-delay: 0.1s; }
+.book-item:nth-child(3) { animation-delay: 0.15s; }
+.book-item:nth-child(4) { animation-delay: 0.2s; }
+.book-item:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes slideInItem {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.book-item:hover {
+  background: #f8f9fa;
+  transform: translateX(2px);
+}
+
+.book-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 12px;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.delete-btn {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  background: #ff4757;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  opacity: 1;
+  background: #ff3838;
+  transform: scale(1.05);
+}
+
+.delete-btn:active {
+  background: #cc0505;
+  transform: scale(0.95);
+}
+.book-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+.book-item:hover {
+  background: #f2f2f2;
+}
+.book-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+.delete-btn {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+.delete-btn:hover {
+  opacity: 1;
+}
+.delete-btn:active {
+  background: #cc0000;
+}
+
+/* 工具条 */
+.meta {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: #666;
+  background: #f9f9f9;
+}
+
+/* ========== 隐藏类 ========== */
+.hidden {
+  display: none !important;
+}
+
+/* ========== 全屏阅读模式 ========== */
+.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  background: #fff;
+}
+
+.fullscreen .reader-header,
+.fullscreen .pager {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.fullscreen .reader-header:hover,
+.fullscreen .pager:hover {
+  opacity: 1;
+}
+
+.fullscreen .viewport {
+  height: 100vh;
+  padding: 20px;
+}
+
+/* ========== 电脑端弹出窗口样式 ========== */
+@media (min-width: 769px) {
+  .book-list-overlay.show {
+    display: block;
+  }
+  
+  .book-list-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    max-width: 90vw;
+    height: 500px;
+    max-height: 80vh;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+  }
+  
+  .book-list-container.show {
+    left: 50%;
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  .book-list-header {
+    border-radius: 8px 8px 0 0;
+  }
+  
+  .list {
+    max-height: calc(80vh - 60px);
+  }
+}
+
+/* ========== 手机端左侧抽屉样式 ========== */
+@media (max-width: 768px) {
+  .book-list-overlay {
+    background: rgba(0, 0, 0, 0.3);
+  }
+  
+  .book-list-container {
+    width: 280px;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
+  }
+  
+  .book-list-container.show {
+    left: 0;
+  }
+}
+  h1 {
+    font-size: 1rem;
+  }
+
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  
+  /* 统一所有按钮大小 */
+  header button,
+  header .file-pill,
+  .reader-header button,
+  .pager button,
+  .speech-controls button {
+    padding: 6px 12px !important;
+    font-size: 0.9rem !important;
+  }
+  
+  .reader-header {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  
+  .reader-header .title {
+    font-size: 0.9rem;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .viewport {
+    font-size: 0.95rem;
+    padding: 10px;
+    line-height: 1.7;
+  }
+
+  .speech-controls {
+    flex-direction: row;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  
+  .speech-controls button {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .speech-controls input[type=range] {
+    width: 60px;
+  }
+  
+  .speech-controls input[type=text] {
+    width: 80px;
+    font-size: 0.8rem;
+  }
+  
+  .speech-controls select {
+    font-size: 0.8rem;
+    max-width: 100px;
+  }
+  
+  .pager {
+    padding: 6px;
+    gap: 6px;
+  }
+  
+  .pager button {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .list {
+    padding: 8px;
+  }
+  
+  .book-item {
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+  }
+  
+  .book-name {
+    margin-right: 8px;
+    font-size: 0.9rem;
+  }
+  
+  .delete-btn {
+    padding: 5px 8px;
+    font-size: 0.75rem;
+  }
+  
+  /* 手机端抽屉样式调整 */
+  .book-list-container {
+    width: 280px;
+    background: #fff;
+  }
+  
+  .book-list-header {
+    padding: 14px 16px;
+  }
+  
+  .book-list-header h3 {
+    font-size: 1rem;
+  }
+  
+  .meta {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+  
+  /* 音频控制元素在手机端默认隐藏 */
+  .audio-rate,
+  .audio-filter,
+  .audio-select {
+    display: none !important;
+  }
+  
+  /* 朗读状态显示音频控制 */
+  .speaking .audio-rate,
+  .speaking .audio-filter,
+  .speaking .audio-select {
+    display: inline-block !important;
+  }
+  
+  /* 横屏模式优化 */
+  @media (orientation: landscape) {
+    header {
+      flex-direction: row;
+      align-items: center;
+    }
+    
+    .reader-header {
+      flex-direction: row;
+      gap: 8px;
+    }
+    
+    .viewport {
+      padding: 8px 12px;
+    }
+  }
+  
+  /* 超小屏幕适配 */
+  @media (max-width: 360px) {
+    .reader-header .title {
+      max-width: 150px;
+    }
+    
+    /* 超小屏幕按钮统一大小 */
+    header button,
+    header .file-pill,
+    .reader-header button,
+    .pager button,
+    .speech-controls button {
+      padding: 6px 10px !important;
+      font-size: 0.85rem !important;
+      min-height: 20px !important;
+    }
+    
+    .viewport {
+      font-size: 0.9rem;
+      padding: 8px;
+    }
+  }
+

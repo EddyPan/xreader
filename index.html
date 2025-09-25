@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>阅读器</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 阅读列表抽屉/弹窗 -->
+    <div class="book-list-overlay" id="bookListOverlay"></div>
+    <div class="book-list-container" id="bookListContainer">
+      <div class="book-list-header">
+        <h3>阅读列表</h3>
+        <button id="btnCloseList" class="close-btn">&times;</button>
+      </div>
+      <div class="list" id="bookList"></div>
+    </div>
+
+    <header>
+      <h1>阅读器</h1>
+      <div class="controls">
+        <label class="ghost file-pill">
+          打开文件<input id="fileInput" type="file" accept=".txt" style="display:none">
+        </label>
+        <button id="btnToggleList" class="ghost">阅读列表</button>
+      </div>
+    </header>
+
+    <div id="dropzone" class="dropzone">
+      把小说（.txt）文件拖放到这里，或点击“打开文件”选择。
+    </div>
+
+    <!-- <div class="meta">
+      <div style="margin-left:auto;text-align:right">
+        <div class="small">快捷键：← → 翻页，空格 播放/暂停朗读，S 停止</div>
+      </div>
+    </div> -->
+
+    <div id="reader" class="reader-wrap hidden">
+      <div class="reader-header">
+        <div>
+          <div class="title" id="bookTitle">未加载</div>
+          <div class="progress small" id="bookProgress">—</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div class="speech-controls">
+            <button id="btnSpeak">朗读</button>
+            <button id="btnStop">停止</button>
+            <label class="small audio-rate">速率 <input id="rate" type="range" min="0.6" max="2" step="0.1" value="1"></label>
+            <label class="small audio-filter">音色筛选 <input id="voiceFilter" type="text" placeholder="输入关键字"></label>
+            <select id="voiceSelect" class="audio-select"></select>
+          </div>
+          <button id="btnPrev" class="ghost">上一页</button>
+          <button id="btnNext" class="ghost">下一页</button>
+          <button id="btnFullscreen" class="ghost">全屏</button>
+        </div>
+      </div>
+
+      <div id="viewport" class="viewport" tabindex="0"></div>
+      <div class="pager">
+        <button id="btnPagePrev">上一页</button>
+        <div id="pageLabel" class="small">第 0 / 0 页</div>
+        <button id="btnPageNext">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="db.js"></script>
+  <script src="reader.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
