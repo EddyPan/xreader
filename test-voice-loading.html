@@ -95,7 +95,16 @@
     </div>
 
     <div class="test-section">
-        <h2>4. 解决方案测试</h2>
+        <h2>4. 新方案测试</h2>
+        <p><strong>新方案：</strong>页面加载时调用getVoices()并监听voiceschanged事件，用户交互时通过空白朗读强制初始化语音引擎</p>
+        <button id="initVoiceEngine">强制初始化语音引擎</button>
+        <button id="testNewSolution">完整测试新方案</button>
+        <button id="resetState">重置状态</button>
+        <div id="newSolutionLog" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. 传统解决方案测试</h2>
         <button id="forceLoadVoices">强制加载语音</button>
         <button id="retryWithDelay">延迟重试加载</button>
         <div id="solutionLog" class="log"></div>
@@ -105,6 +114,7 @@
         let eventLogDiv = document.getElementById('eventLog');
         let solutionLogDiv = document.getElementById('solutionLog');
         let voiceListDiv = document.getElementById('voiceList');
+        let newSolutionLogDiv = document.getElementById('newSolutionLog');
 
         function log(message, type = 'info') {
             const timestamp = new Date().toLocaleTimeString();
@@ -116,6 +126,9 @@
             } else if (type === 'solution') {
                 solutionLogDiv.innerHTML += logEntry + '<br>';
                 solutionLogDiv.scrollTop = solutionLogDiv.scrollHeight;
+            } else if (type === 'newSolution') {
+                newSolutionLogDiv.innerHTML += logEntry + '<br>';
+                newSolutionLogDiv.scrollTop = newSolutionLogDiv.scrollHeight;
             } else {
                 console.log(logEntry);
             }
@@ -300,6 +313,143 @@
             retry();
         });
 
+        // 新方案：页面加载时初始化 + 用户交互强制初始化
+        let initializationAttempted = false;
+        let voicesChangedReceived = false;
+
+        /**
+         * 页面加载时的初始化函数
+         * 调用getVoices()并设置事件监听
+         */
+        function initializeOnLoad() {
+            log('页面加载 - 开始初始化语音系统...', 'newSolution');
+            
+            // 1. 立即调用getVoices()
+            const initialVoices = window.speechSynthesis.getVoices();
+            log(`初始getVoices()返回: ${initialVoices.length} 个语音`, 'newSolution');
+            
+            // 2. 设置voiceschanged事件监听
+            window.speechSynthesis.onvoiceschanged = function() {
+                voicesChangedReceived = true;
+                const voices = window.speechSynthesis.getVoices();
+                log(`🎉 voiceschanged事件触发！现在有 ${voices.length} 个语音`, 'newSolution');
+                
+                if (voices.length > 0) {
+                    log('✅ 语音列表已成功加载', 'newSolution');
+                    updateStatus('voiceStatus', `语音加载成功！共 ${voices.length} 个语音`, 'success');
+                }
+            };
+            
+            log('✅ 已设置voiceschanged事件监听器', 'newSolution');
+            
+            if (initialVoices.length === 0) {
+                log('⚠️ 初始语音列表为空，等待用户交互触发强制初始化', 'newSolution');
+                updateStatus('voiceStatus', '语音列表为空，请点击按钮强制初始化', 'warning');
+            }
+        }
+
+        /**
+         * 强制初始化语音引擎
+         * 通过空白朗读触发语音系统初始化
+         */
+        function forceInitializeVoiceEngine() {
+            log('🚀 执行强制初始化语音引擎...', 'newSolution');
+            
+            if (!window.speechSynthesis) {
+                log('❌ 浏览器不支持语音合成', 'newSolution');
+                return;
+            }
+            
+            try {
+                // 创建一个空白的语音合成请求
+                const emptyUtterance = new SpeechSynthesisUtterance('');
+                emptyUtterance.volume = 0; // 静音，避免用户听到声音
+                
+                log('🔄 创建空白语音请求...', 'newSolution');
+                
+                // 监听事件以确保初始化完成
+                emptyUtterance.onstart = function() {
+                    log('✅ 空白语音请求已开始（引擎已激活）', 'newSolution');
+                };
+                
+                emptyUtterance.onend = function() {
+                    log('✅ 空白语音请求已完成', 'newSolution');
+                    
+                    // 检查语音列表是否已更新
+                    setTimeout(() => {
+                        const voices = window.speechSynthesis.getVoices();
+                        log(`📝 强制初始化后getVoices()返回: ${voices.length} 个语音`, 'newSolution');
+                        
+                        if (voices.length > 0) {
+                            log('🎉 成功！强制初始化已生效', 'newSolution');
+                            updateStatus('voiceStatus', `强制初始化成功！共 ${voices.length} 个语音`, 'success');
+                        } else {
+                            log('⚠️ 强制初始化可能未完成，等待voiceschanged事件...', 'newSolution');
+                        }
+                    }, 100);
+                };
+                
+                // 立即执行空白朗读以强制初始化
+                window.speechSynthesis.speak(emptyUtterance);
+                log('✅ 已发送空白语音请求', 'newSolution');
+                
+                initializationAttempted = true;
+                
+            } catch (error) {
+                log(`❌ 强制初始化失败: ${error.message}`, 'newSolution');
+            }
+        }
+
+        /**
+         * 完整测试新方案
+         */
+        function testCompleteSolution() {
+            log('🧪 开始完整测试新方案...', 'newSolution');
+            
+            // 步骤1: 检查当前状态
+            const currentVoices = window.speechSynthesis.getVoices();
+            log(`📊 当前语音数量: ${currentVoices.length}`, 'newSolution');
+            
+            if (currentVoices.length > 0) {
+                log('✅ 语音列表已加载，无需强制初始化', 'newSolution');
+                return;
+            }
+            
+            // 步骤2: 执行强制初始化
+            log('🔄 语音列表为空，执行强制初始化...', 'newSolution');
+            forceInitializeVoiceEngine();
+            
+            // 步骤3: 等待并验证结果
+            setTimeout(() => {
+                const finalVoices = window.speechSynthesis.getVoices();
+                log(`⏰ 等待后语音数量: ${finalVoices.length}`, 'newSolution');
+                
+                if (finalVoices.length > 0) {
+                    log('🎉 新方案测试成功！', 'newSolution');
+                } else if (voicesChangedReceived) {
+                    log('⚠️ voiceschanged事件已触发但语音仍为空，可能需要其他方法', 'newSolution');
+                } else {
+                    log('⏳ voiceschanged事件尚未触发，继续等待...', 'newSolution');
+                }
+            }, 2000);
+        }
+
+        /**
+         * 重置状态
+         */
+        function resetState() {
+            initializationAttempted = false;
+            voicesChangedReceived = false;
+            newSolutionLogDiv.innerHTML = '';
+            log('🔄 状态已重置', 'newSolution');
+            updateStatus('voiceStatus', '状态已重置', 'success');
+        }
+
+        // 绑定新方案按钮事件
+        document.getElementById('initVoiceEngine').addEventListener('click', forceInitializeVoiceEngine);
+        document.getElementById('testNewSolution').addEventListener('click', testCompleteSolution);
+        document.getElementById('resetState').addEventListener('click', resetState);
+
         // 页面加载时自动检测
         window.addEventListener('load', function() {
             log('页面加载完成，自动检测语音状态...', 'solution');
@@ -309,6 +459,9 @@
             if (voices.length === 0) {
                 updateStatus('voiceStatus', '检测到语音列表为空，这是安卓Edge浏览器的已知问题', 'warning');
             }
+            
+            // 执行新方案的初始化
+            initializeOnLoad();
         });
     </script>
 </body>
