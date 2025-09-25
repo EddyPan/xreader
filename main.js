@@ -26,40 +26,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // 初始化语音
   /**
-   * 初始化语音合成音色（移动端优化版本）
-   * 针对安卓Edge浏览器等移动端浏览器进行优化
-   * 加载浏览器支持的语音列表，设置音色变化监听器
-   * 优先从本地存储恢复用户选择的音色
+   * 初始化语音合成音色
+   * 根据当前过滤条件加载可用音色列表
    */
   function initVoices() {
-    // 多次尝试获取音色列表，兼容不同浏览器实现
-    voices = window.speechSynthesis.getVoices();
-    
-    // 移动端优化：立即尝试加载，如果为空则等待事件
-    if (voices.length === 0) {
-      console.log('音色列表为空，等待 onvoiceschanged 事件...');
-      
-      // 设置监听器，但先尝试强制触发
-      window.speechSynthesis.onvoiceschanged = () => {
-        console.log('收到 onvoiceschanged 事件');
-        voices = window.speechSynthesis.getVoices();
-        loadVoices(document.getElementById('voiceFilter').value);
-      };
-      
-      // 某些浏览器需要延迟后再次检查
-      setTimeout(() => {
-        voices = window.speechSynthesis.getVoices();
-        if (voices.length > 0) {
-          console.log('延迟加载音色成功');
-          loadVoices(document.getElementById('voiceFilter').value);
-        } else {
-          console.warn('延迟加载后仍然没有音色');
-        }
-      }, 2000);
-    } else {
-      console.log('初始加载音色成功，共', voices.length, '个');
-      loadVoices(document.getElementById('voiceFilter').value);
-    }
+    loadVoices(document.getElementById('voiceFilter').value);
   }
   window.speechSynthesis.onvoiceschanged = initVoices;
   initVoices();
@@ -123,70 +94,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnPageNext').onclick = nextPage;
 
   // 朗读
-  // 朗读按钮点击事件（移动端优化）
-  document.getElementById('btnSpeak').addEventListener('click', async () => {
-    try {
-      // 移动端需要用户手势才能播放音频，先检查语音合成状态
-      if (!isSpeechSynthesisReady()) {
-        console.warn('语音合成未就绪，尝试重新初始化...');
-        // 强制重新加载音色
-        voices = window.speechSynthesis.getVoices();
-        if (voices.length === 0) {
-          alert('语音合成功能暂不可用，请检查浏览器设置');
-          return;
-        }
-      }
-      
-      // 确保有选中的音色
-      if (!selectedVoice && voices.length > 0) {
-        selectedVoice = voices[0];
-        console.log('自动选择第一个音色:', selectedVoice.name);
-      }
-      
-      await startSpeaking();
-    } catch (error) {
-      console.error('朗读失败:', error);
-      console.error('错误详情:', error.message);
-      console.error('浏览器信息:', navigator.userAgent);
-      alert('朗读功能暂时不可用，请检查浏览器是否支持语音合成');
-    }
-  });
-
-  // 段落点击朗读（移动端优化）
-  document.addEventListener('click', async (e) => {
-    const p = e.target.closest('#viewport p');
-    if (!p) return;
-    const index = Array.from(document.querySelectorAll('#viewport p')).indexOf(p);
-    if (index === -1) return;
-    
-    try {
-      // 移动端需要用户手势才能播放音频，先检查语音合成状态
-      if (!isSpeechSynthesisReady()) {
-        console.warn('语音合成未就绪，尝试重新初始化...');
-        // 强制重新加载音色
-        voices = window.speechSynthesis.getVoices();
-        if (voices.length === 0) {
-          alert('语音合成功能暂不可用，请检查浏览器设置');
-          return;
-        }
-      }
-      
-      // 确保有选中的音色
-      if (!selectedVoice && voices.length > 0) {
-        selectedVoice = voices[0];
-        console.log('自动选择第一个音色:', selectedVoice.name);
-      }
-      
-      if (currentSpeakingIndex !== index) {
-        currentSpeakingIndex = index;
-        await startSpeaking();
-      }
-    } catch (error) {
-      console.error('段落朗读失败:', error);
-      console.error('错误详情:', error.message);
-      alert('朗读功能暂时不可用，请检查浏览器是否支持语音合成');
-    }
-  });
+  document.getElementById('btnSpeak').onclick = startSpeaking;
   document.getElementById('btnStop').onclick = stopSpeaking;
 
   // 全屏

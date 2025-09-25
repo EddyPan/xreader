@@ -15,16 +15,78 @@ const META_KEY = 'NovelReaderMeta'; // 保存上次阅读信息
 // ---------------- 文本处理 ----------------
 /**
  * 将文本按段落分割
- * 处理Windows换行符，按空行分割，去除空白段落
+ * 优化逻辑：出现回车就识别为新段落，删除空段落
+ * 处理各种换行符格式，智能识别段落边界
  * @param {string} text - 需要分割的完整文本
  * @returns {Array<string>} 返回段落数组，每个元素是一个段落文本
  */
 function splitTextToParas(text) {
-  return text
-    .replace(/\r\n/g, '\n')
-    .split(/\n\s*\n/)
-    .map(s => s.trim())
-    .filter(Boolean);
+  // 第一步：统一换行符格式
+  let normalizedText = text
+    .replace(/\r\n/g, '\n')  // Windows换行符
+    .replace(/\r/g, '\n');   // Mac换行符
+  
+  // 第二步：按回车分割，每个回车都作为段落边界
+  let paragraphs = normalizedText.split('\n');
+  
+  // 第三步：清理和过滤段落
+  paragraphs = paragraphs
+    .map(paragraph => {
+      // 移除段落前后的空白字符
+      paragraph = paragraph.trim();
+      
+      // 移除段落内部的多个连续空格，保留一个
+      paragraph = paragraph.replace(/\s+/g, ' ');
+      
+      return paragraph;
+    })
+    .filter(paragraph => {
+      // 过滤掉空段落（包括只有空格、制表符的段落）
+      return paragraph.length > 0;
+    });
+  
+  // 第四步：进一步处理特殊情况
+  // 如果段落以句号、问号、感叹号结尾，且长度超过一定阈值，认为是完整段落
+  paragraphs = paragraphs.map(paragraph => {
+    // 如果段落太短（少于10个字符），考虑与下一段合并
+    if (paragraph.length < 10 && paragraphs.indexOf(paragraph) < paragraphs.length - 1) {
+      const nextIndex = paragraphs.indexOf(paragraph) + 1;
+      if (nextIndex < paragraphs.length) {
+        // 检查当前段落是否以标点符号结尾
+        const endsWithPunctuation = /[。！？.!?]$/.test(paragraph);
+        if (!endsWithPunctuation) {
+          // 不与下一段合并，保持独立段落
+          return paragraph;
+        }
+      }
+    }
+    return paragraph;
+  });
+  
+  // 重新过滤，确保没有空段落
+  return paragraphs.filter(paragraph => paragraph.length > 0);
+}
+
+/**
+ * 测试段落划分功能
+ * 用于验证优化后的段落划分逻辑
+ * @param {string} testText - 测试文本
+ * @returns {void}
+ */
+function testParagraphSplitting(testText) {
+  console.log('=== 段落划分测试 ===');
+  console.log('原始文本:');
+  console.log(testText);
+  console.log('\n划分结果:');
+  
+  const paragraphs = splitTextToParas(testText);
+  
+  paragraphs.forEach((paragraph, index) => {
+    console.log(`段落 ${index + 1} (${paragraph.length} 字符): "${paragraph}"`);
+  });
+  
+  console.log(`\n总共划分出 ${paragraphs.length} 个段落`);
+  console.log('==================');
 }
 
 /**
@@ -399,65 +461,13 @@ function toggleFullscreen() {
 
 // ---------------- 音色管理 ----------------
 /**
- * 检查语音合成系统是否准备就绪（移动端优化版本）
- * 针对安卓Edge浏览器等移动端浏览器的兼容性问题进行优化
- * @returns {boolean} 语音合成是否可用
- */
-function isSpeechSynthesisReady() {
-  // 安卓Edge浏览器兼容性检查
-  if (!window.speechSynthesis) {
-    console.warn('当前浏览器不支持语音合成API');
-    return false;
-  }
-  
-  // 获取音色列表，某些浏览器需要多次调用
-  let voices = window.speechSynthesis.getVoices();
-  
-  // 移动端音色加载可能需要更长时间，进行多次检查
-  if (voices.length === 0) {
-    // 尝试触发音色加载
-    if (window.speechSynthesis.onvoiceschanged === null) {
-      // 如果还没有设置监听器，手动触发一次
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-    
-    // 某些浏览器需要延迟后再次检查
-    setTimeout(() => {
-      voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        console.log('延迟加载音色成功');
-        loadVoices();
-      }
-    }, 1000);
-  }
-  
-  return voices.length > 0;
-}
-
-/**
- * 加载可用的语音合成音色（移动端优化版本）
- * 针对安卓Edge浏览器的兼容性问题进行优化
+ * 加载可用的语音合成音色
  * 获取系统支持的语音列表，并根据过滤条件筛选
  * 更新音色选择下拉框并自动选择第一个匹配的音色
  * @param {string} filter - 可选的过滤字符串，用于筛选音色名称或语言
  */
 function loadVoices(filter = '') {
-  // 多次尝试获取音色列表，兼容不同浏览器实现
-  voices = window.speechSynthesis.getVoices();
-  
-  // 如果音色为空，尝试延迟加载（针对移动端）
-  if (voices.length === 0) {
-    console.log('音色列表为空，尝试延迟加载...');
-    setTimeout(() => {
-      voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        console.log('延迟加载音色成功，重新加载');
-        loadVoices(filter);
-      }
-    }, 500);
-    return;
-  }
-  
+  voices = speechSynthesis.getVoices();
   const voiceSelect = document.getElementById('voiceSelect');
   
   // 优先使用本地存储的音色选择，回退到当前选择的音色
@@ -492,20 +502,6 @@ function loadVoices(filter = '') {
     selectedVoice = filtered[0];
     // 保存默认选择
     localStorage.setItem('selectedVoiceName', selectedVoice.name);
-  }
-  
-  // 如果仍然没有音色，显示调试信息
-  if (filtered.length === 0) {
-    console.warn('没有找到可用的语音合成音色');
-    console.log('浏览器信息:', navigator.userAgent);
-    console.log('支持的语言:', navigator.language);
-    
-    // 添加一个默认选项提示用户
-    const opt = document.createElement('option');
-    opt.textContent = '暂无可用音色';
-    opt.disabled = true;
-    opt.selected = true;
-    voiceSelect.appendChild(opt);
   }
 }
 
