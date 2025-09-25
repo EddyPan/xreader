@@ -31,6 +31,16 @@ window.addEventListener('DOMContentLoaded', async () => {
    */
   function initVoices() {
     loadVoices(document.getElementById('voiceFilter').value);
+    
+    // 如果语音列表仍然为空，在下拉框中显示提示信息
+    const voiceSelect = document.getElementById('voiceSelect');
+    if (voiceSelect.options.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = '正在加载语音列表...';
+      opt.disabled = true;
+      opt.selected = true;
+      voiceSelect.appendChild(opt);
+    }
   }
   window.speechSynthesis.onvoiceschanged = initVoices;
   initVoices();

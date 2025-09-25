@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>语音加载测试 - 安卓Edge浏览器</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>语音加载测试工具</h1>
+    <p>专门测试安卓Edge浏览器中Web Speech API的语音加载问题</p>
+
+    <div class="test-section">
+        <h2>1. 语音列表检测</h2>
+        <button id="checkVoices">检测语音列表</button>
+        <button id="checkSupport">检测浏览器支持</button>
+        <div id="voiceStatus" class="status"></div>
+        <div id="voiceList" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. 语音合成测试</h2>
+        <button id="testSpeak">测试朗读</button>
+        <button id="testSpeakWithVoice">使用指定音色朗读</button>
+        <input type="text" id="testText" value="你好，这是一个语音合成测试。" style="width: 100%; padding: 8px; margin: 10px 0;">
+        <div id="speakStatus" class="status"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. 事件监听测试</h2>
+        <button id="listenVoicesChanged">监听voiceschanged事件</button>
+        <button id="triggerVoiceLoad">触发语音加载</button>
+        <div id="eventLog" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. 解决方案测试</h2>
+        <button id="forceLoadVoices">强制加载语音</button>
+        <button id="retryWithDelay">延迟重试加载</button>
+        <div id="solutionLog" class="log"></div>
+    </div>
+
+    <script>
+        let eventLogDiv = document.getElementById('eventLog');
+        let solutionLogDiv = document.getElementById('solutionLog');
+        let voiceListDiv = document.getElementById('voiceList');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            
+            if (type === 'event') {
+                eventLogDiv.innerHTML += logEntry + '<br>';
+                eventLogDiv.scrollTop = eventLogDiv.scrollHeight;
+            } else if (type === 'solution') {
+                solutionLogDiv.innerHTML += logEntry + '<br>';
+                solutionLogDiv.scrollTop = solutionLogDiv.scrollHeight;
+            } else {
+                console.log(logEntry);
+            }
+        }
+
+        function updateStatus(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        // 1. 语音列表检测
+        document.getElementById('checkVoices').addEventListener('click', function() {
+            const voices = window.speechSynthesis.getVoices();
+            const voiceCount = voices.length;
+            
+            updateStatus('voiceStatus', `检测到 ${voiceCount} 个语音`, voiceCount > 0 ? 'success' : 'warning');
+            
+            voiceListDiv.innerHTML = '';
+            if (voiceCount === 0) {
+                voiceListDiv.innerHTML = '语音列表为空 - 这是安卓Edge浏览器的已知问题';
+            } else {
+                voices.forEach((voice, index) => {
+                    voiceListDiv.innerHTML += `${index + 1}. ${voice.name} (${voice.lang})<br>`;
+                });
+            }
+        });
+
+        document.getElementById('checkSupport').addEventListener('click', function() {
+            const hasSupport = 'speechSynthesis' in window;
+            const voices = hasSupport ? window.speechSynthesis.getVoices() : [];
+            const message = hasSupport ? 
+                `浏览器支持Web Speech API，当前有 ${voices.length} 个语音` : 
+                '浏览器不支持Web Speech API';
+            
+            updateStatus('voiceStatus', message, hasSupport ? 'success' : 'error');
+        });
+
+        // 2. 语音合成测试
+        document.getElementById('testSpeak').addEventListener('click', function() {
+            const text = document.getElementById('testText').value;
+            
+            if (!window.speechSynthesis) {
+                updateStatus('speakStatus', '浏览器不支持语音合成', 'error');
+                return;
+            }
+
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length === 0) {
+                updateStatus('speakStatus', '语音列表为空，无法朗读', 'warning');
+                return;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onstart = () => {
+                updateStatus('speakStatus', '正在朗读...', 'success');
+            };
+            utterance.onend = () => {
+                updateStatus('speakStatus', '朗读完成', 'success');
+            };
+            utterance.onerror = (event) => {
+                updateStatus('speakStatus', `朗读错误: ${event.error}`, 'error');
+            };
+
+            window.speechSynthesis.speak(utterance);
+        });
+
+        document.getElementById('testSpeakWithVoice').addEventListener('click', function() {
+            const text = document.getElementById('testText').value;
+            const voices = window.speechSynthesis.getVoices();
+            
+            if (voices.length === 0) {
+                updateStatus('speakStatus', '没有可用的语音', 'warning');
+                return;
+            }
+
+            // 优先选择中文语音
+            let selectedVoice = voices.find(voice => voice.lang.includes('zh')) || voices[0];
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = selectedVoice;
+            utterance.onstart = () => {
+                updateStatus('speakStatus', `使用 ${selectedVoice.name} 朗读中...`, 'success');
+            };
+            utterance.onend = () => {
+                updateStatus('speakStatus', '朗读完成', 'success');
+            };
+
+            window.speechSynthesis.speak(utterance);
+        });
+
+        // 3. 事件监听测试
+        document.getElementById('listenVoicesChanged').addEventListener('click', function() {
+            log('开始监听voiceschanged事件...', 'event');
+            
+            window.speechSynthesis.onvoiceschanged = function() {
+                const voices = window.speechSynthesis.getVoices();
+                log(`voiceschanged事件触发！当前有 ${voices.length} 个语音`, 'event');
+            };
+            
+            log('已设置voiceschanged事件监听器', 'event');
+        });
+
+        document.getElementById('triggerVoiceLoad').addEventListener('click', function() {
+            log('手动触发语音加载...', 'event');
+            
+            // 尝试多种方法触发语音加载
+            const voices = window.speechSynthesis.getVoices();
+            log(`直接调用getVoices()返回 ${voices.length} 个语音`, 'event');
+            
+            // 创建并取消一个朗读任务，有时可以触发语音加载
+            const testUtterance = new SpeechSynthesisUtterance('测试');
+            testUtterance.volume = 0; // 静音
+            window.speechSynthesis.speak(testUtterance);
+            window.speechSynthesis.cancel();
+            
+            log('已尝试通过创建朗读任务触发加载', 'event');
+        });
+
+        // 4. 解决方案测试
+        document.getElementById('forceLoadVoices').addEventListener('click', function() {
+            log('尝试强制加载语音...', 'solution');
+            
+            function tryLoadVoices() {
+                const voices = window.speechSynthesis.getVoices();
+                log(`尝试加载: 当前有 ${voices.length} 个语音`, 'solution');
+                
+                if (voices.length === 0) {
+                    // 如果仍然为空，等待一段时间后重试
+                    setTimeout(() => {
+                        if (window.speechSynthesis.getVoices().length === 0) {
+                            log('语音仍为空，建议用户手动开启浏览器朗读功能', 'solution');
+                        }
+                    }, 2000);
+                } else {
+                    log(`成功加载 ${voices.length} 个语音！`, 'solution');
+                }
+                
+                return voices;
+            }
+            
+            // 立即尝试
+            tryLoadVoices();
+            
+            // 设置监听器
+            window.speechSynthesis.onvoiceschanged = function() {
+                const voices = window.speechSynthesis.getVoices();
+                log(`voiceschanged事件: 现在有 ${voices.length} 个语音`, 'solution');
+            };
+        });
+
+        document.getElementById('retryWithDelay').addEventListener('click', function() {
+            log('开始延迟重试加载语音...', 'solution');
+            
+            let retryCount = 0;
+            const maxRetries = 5;
+            
+            function retry() {
+                retryCount++;
+                const voices = window.speechSynthesis.getVoices();
+                
+                log(`第 ${retryCount} 次重试: ${voices.length} 个语音`, 'solution');
+                
+                if (voices.length === 0 && retryCount < maxRetries) {
+                    setTimeout(retry, 1000); // 每秒重试一次
+                } else if (voices.length > 0) {
+                    log(`成功！在第 ${retryCount} 次重试时加载了语音`, 'solution');
+                } else {
+                    log(`重试 ${maxRetries} 次后仍未加载语音，可能需要手动干预`, 'solution');
+                }
+            }
+            
+            // 设置监听器
+            window.speechSynthesis.onvoiceschanged = function() {
+                const voices = window.speechSynthesis.getVoices();
+                log(`voiceschanged事件触发: ${voices.length} 个语音`, 'solution');
+                if (voices.length > 0) {
+                    log('语音已加载，可以停止重试', 'solution');
+                }
+            };
+            
+            retry();
+        });
+
+        // 页面加载时自动检测
+        window.addEventListener('load', function() {
+            log('页面加载完成，自动检测语音状态...', 'solution');
+            const voices = window.speechSynthesis.getVoices();
+            log(`初始状态: ${voices.length} 个语音`, 'solution');
+            
+            if (voices.length === 0) {
+                updateStatus('voiceStatus', '检测到语音列表为空，这是安卓Edge浏览器的已知问题', 'warning');
+            }
+        });
+    </script>
+</body>
+</html>
