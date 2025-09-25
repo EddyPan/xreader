@@ -231,28 +231,14 @@ function saveReadingProgress() {
 }
 
 /**
- * 检查语音合成系统是否就绪
+ * 检查语音合成系统是否准备就绪
  * 确保voices已加载且有可用音色
  * @returns {boolean} 语音合成是否可用
  */
 function isSpeechSynthesisReady() {
-  // 检查浏览器是否支持语音合成
-  if (!window.speechSynthesis) {
-    console.warn('浏览器不支持语音合成API');
-    return false;
-  }
-  
   const voices = window.speechSynthesis.getVoices();
-  
-  // 安卓Edge浏览器需要特殊处理：如果voices为空，尝试重新加载
-  if (voices.length === 0) {
-    console.log('语音列表为空，可能是异步加载未完成');
-    return false;
-  }
-  
-  return true;
+  return voices.length > 0 && window.speechSynthesis;
 }
-
 /**
  * 高亮显示当前朗读的段落
  * 移除之前的高亮，为当前段落添加高亮样式
@@ -375,24 +361,11 @@ function startSpeaking() {
   if (!isSpeechSynthesisReady()) {
     console.warn('语音合成系统未就绪，尝试重新加载音色...');
     loadVoices();
-    
-    // 显示用户友好的提示
-    const voiceSelect = document.getElementById('voiceSelect');
-    if (voiceSelect.options.length === 0 || (voiceSelect.options.length === 1 && voiceSelect.options[0].disabled)) {
-      alert('语音列表正在加载中，请稍后再试。\n\n安卓Edge浏览器提示：如果长时间无法加载，请尝试在浏览器设置中开启"大声朗读"功能一次。');
-    }
-    
-    // 尝试重新初始化语音
     setTimeout(() => {
       if (isSpeechSynthesisReady() && isSpeaking) {
         speakNextParagraph();
-      } else if (isSpeaking) {
-        // 如果仍然失败，重置状态
-        isSpeaking = false;
-        updateSpeakButton();
-        alert('语音加载失败，请检查浏览器语音设置或稍后再试。');
       }
-    }, 1000);
+    }, 500);
     return;
   }
    
@@ -496,12 +469,6 @@ function toggleFullscreen() {
 function loadVoices(filter = '') {
   voices = speechSynthesis.getVoices();
   const voiceSelect = document.getElementById('voiceSelect');
-  
-  // 如果voices为空，可能是异步加载未完成，等待onvoiceschanged事件
-  if (voices.length === 0) {
-    console.log('语音列表为空，等待onvoiceschanged事件...');
-    return;
-  }
   
   // 优先使用本地存储的音色选择，回退到当前选择的音色
   const savedVoiceName = localStorage.getItem('selectedVoiceName');
