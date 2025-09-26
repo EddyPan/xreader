@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>系统事件监听测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .event-log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 20px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .event-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background: white;
+        }
+        .event-item.system {
+            border-left-color: #28a745;
+        }
+        .event-item.error {
+            border-left-color: #dc3545;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .instructions {
+            background: #e2e3e5;
+            border: 1px solid #d6d8db;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>系统语音合成事件监听测试</h1>
+        
+        <div class="instructions">
+            <h3>测试说明：</h3>
+            <ul>
+                <li><strong>系统事件监听：</strong>测试浏览器语音合成API的系统事件</li>
+                <li><strong>媒体会话控制：</strong>测试浏览器媒体控制（如媒体键、通知栏）</li>
+                <li><strong>页面可见性：</strong>测试页面隐藏/显示时的朗读状态</li>
+                <li><strong>错误处理：</strong>测试语音合成错误事件处理</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <button id="testStart">测试开始朗读</button>
+            <button id="testPause">测试暂停朗读</button>
+            <button id="testResume">测试恢复朗读</button>
+            <button id="testStop">测试停止朗读</button>
+            <button id="clearLog">清空日志</button>
+        </div>
+
+        <div class="status" id="status">
+            状态：准备就绪
+        </div>
+
+        <div class="event-log" id="eventLog">
+            <div class="event-item">系统初始化完成</div>
+        </div>
+    </div>
+
+    <script>
+        let isSpeaking = false;
+        let utterance = null;
+        let eventCount = 0;
+
+        const eventLog = document.getElementById('eventLog');
+        const status = document.getElementById('status');
+
+        function logEvent(message, type = 'user') {
+            eventCount++;
+            const timestamp = new Date().toLocaleTimeString();
+            const eventItem = document.createElement('div');
+            eventItem.className = `event-item ${type}`;
+            eventItem.innerHTML = `<strong>[${timestamp}] #${eventCount}</strong> ${message}`;
+            eventLog.appendChild(eventItem);
+            eventLog.scrollTop = eventLog.scrollHeight;
+        }
+
+        function updateStatus(message) {
+            status.textContent = `状态：${message}`;
+            logEvent(`状态更新: ${message}`, 'system');
+        }
+
+        // 设置系统语音合成事件监听
+        function setupSystemEventListeners() {
+            if (!window.speechSynthesis) {
+                updateStatus('浏览器不支持语音合成');
+                return;
+            }
+
+            // 监听系统开始朗读事件
+            window.speechSynthesis.onstart = function(event) {
+                logEvent('系统事件: 开始朗读 (onstart)', 'system');
+                isSpeaking = true;
+                updateStatus('正在朗读');
+            };
+
+            // 监听系统暂停朗读事件
+            window.speechSynthesis.onpause = function(event) {
+                logEvent('系统事件: 暂停朗读 (onpause)', 'system');
+                isSpeaking = false;
+                updateStatus('已暂停');
+            };
+
+            // 监听系统恢复朗读事件
+            window.speechSynthesis.onresume = function(event) {
+                logEvent('系统事件: 恢复朗读 (onresume)', 'system');
+                isSpeaking = true;
+                updateStatus('正在朗读');
+            };
+
+            // 监听系统结束朗读事件
+            window.speechSynthesis.onend = function(event) {
+                logEvent('系统事件: 结束朗读 (onend)', 'system');
+                isSpeaking = false;
+                updateStatus('朗读结束');
+            };
+
+            // 监听系统错误事件
+            window.speechSynthesis.onerror = function(event) {
+                logEvent(`系统事件: 错误 (onerror) - ${event.error}`, 'error');
+                isSpeaking = false;
+                updateStatus('发生错误');
+            };
+
+            // 设置媒体会话事件监听
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.setActionHandler('play', () => {
+                    logEvent('媒体会话事件: 播放', 'system');
+                    testStartSpeaking();
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    logEvent('媒体会话事件: 暂停', 'system');
+                    if (isSpeaking) {
+                        window.speechSynthesis.pause();
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('stop', () => {
+                    logEvent('媒体会话事件: 停止', 'system');
+                    window.speechSynthesis.cancel();
+                });
+
+                // 设置媒体会话元数据
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: '系统事件测试',
+                    artist: '语音合成测试',
+                    album: '测试模式'
+                });
+
+                logEvent('媒体会话API已初始化', 'system');
+            }
+
+            // 设置页面可见性变化监听
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && isSpeaking) {
+                    logEvent('页面可见性: 页面隐藏，暂停朗读', 'system');
+                    window.speechSynthesis.pause();
+                } else if (!document.hidden && window.speechSynthesis.paused && window.speechSynthesis.speaking) {
+                    logEvent('页面可见性: 页面显示，恢复朗读', 'system');
+                    window.speechSynthesis.resume();
+                }
+            });
+
+            logEvent('系统事件监听器已设置', 'system');
+            updateStatus('事件监听器已就绪');
+        }
+
+        // 测试开始朗读
+        function testStartSpeaking() {
+            if (!window.speechSynthesis) {
+                updateStatus('浏览器不支持语音合成');
+                return;
+            }
+
+            if (isSpeaking) {
+                logEvent('用户操作: 已在朗读中，忽略开始请求', 'user');
+                return;
+            }
+
+            logEvent('用户操作: 开始朗读', 'user');
+            
+            // 创建测试文本
+            const testText = "这是一个系统语音合成事件监听测试。请观察事件日志中的系统事件响应。";
+            utterance = new SpeechSynthesisUtterance(testText);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            // 设置朗读语言为中文
+            const voices = window.speechSynthesis.getVoices();
+            const chineseVoice = voices.find(voice => 
+                voice.lang.includes('zh') || voice.lang.includes('cn')
+            );
+            if (chineseVoice) {
+                utterance.voice = chineseVoice;
+                logEvent(`使用音色: ${chineseVoice.name}`, 'user');
+            }
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 测试暂停朗读
+        function testPauseSpeaking() {
+            if (!window.speechSynthesis || !window.speechSynthesis.speaking) {
+                logEvent('用户操作: 没有正在进行的朗读', 'user');
+                return;
+            }
+
+            logEvent('用户操作: 暂停朗读', 'user');
+            window.speechSynthesis.pause();
+        }
+
+        // 测试恢复朗读
+        function testResumeSpeaking() {
+            if (!window.speechSynthesis || !window.speechSynthesis.paused) {
+                logEvent('用户操作: 没有暂停的朗读', 'user');
+                return;
+            }
+
+            logEvent('用户操作: 恢复朗读', 'user');
+            window.speechSynthesis.resume();
+        }
+
+        // 测试停止朗读
+        function testStopSpeaking() {
+            if (!window.speechSynthesis || !window.speechSynthesis.speaking) {
+                logEvent('用户操作: 没有正在进行的朗读', 'user');
+                return;
+            }
+
+            logEvent('用户操作: 停止朗读', 'user');
+            window.speechSynthesis.cancel();
+        }
+
+        // 清空日志
+        function clearLog() {
+            eventLog.innerHTML = '';
+            eventCount = 0;
+            logEvent('日志已清空', 'system');
+        }
+
+        // 绑定按钮事件
+        document.getElementById('testStart').addEventListener('click', testStartSpeaking);
+        document.getElementById('testPause').addEventListener('click', testPauseSpeaking);
+        document.getElementById('testResume').addEventListener('click', testResumeSpeaking);
+        document.getElementById('testStop').addEventListener('click', testStopSpeaking);
+        document.getElementById('clearLog').addEventListener('click', clearLog);
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', () => {
+            // 等待语音列表加载
+            if (window.speechSynthesis) {
+                if (window.speechSynthesis.getVoices().length === 0) {
+                    window.speechSynthesis.onvoiceschanged = () => {
+                        setupSystemEventListeners();
+                    };
+                } else {
+                    setupSystemEventListeners();
+                }
+            } else {
+                updateStatus('浏览器不支持语音合成API');
+            }
+        });
+    </script>
+</body>
+</html>
