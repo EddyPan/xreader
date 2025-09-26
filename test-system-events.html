@@ -75,6 +75,22 @@
             border-radius: 4px;
             margin-bottom: 20px;
         }
+        .keyboard-hint {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            color: #856404;
+        }
+        .key {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -88,7 +104,13 @@
                 <li><strong>媒体会话控制：</strong>测试浏览器媒体控制（如媒体键、通知栏）</li>
                 <li><strong>页面可见性：</strong>测试页面隐藏/显示时的朗读状态</li>
                 <li><strong>错误处理：</strong>测试语音合成错误事件处理</li>
+                <li><strong>Android通知控制：</strong>支持Android系统通知栏播放控制</li>
+                <li><strong>空格键控制：</strong>按空格键切换播放/暂停</li>
             </ul>
+        </div>
+
+        <div class="keyboard-hint">
+            <strong>💡 快捷键提示：</strong> 按 <span class="key">空格键</span> 可以切换播放/暂停朗读状态
         </div>
 
         <div class="controls">
@@ -131,6 +153,58 @@
             logEvent(`状态更新: ${message}`, 'system');
         }
 
+        // 更新媒体会话播放状态
+        function updateMediaSessionState(state) {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = state;
+                logEvent(`媒体会话状态更新: ${state}`, 'system');
+            }
+        }
+
+        // 更新媒体会话元数据
+        function updateMediaSessionMetadata(title, artist = '语音合成测试', album = '测试模式') {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: title,
+                    artist: artist,
+                    album: album,
+                    artwork: [
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0xMjggNzJDNjcuNzU3IDcyIDIwIDExOS43NTcgMjAgMTgwQzIwIDI0MC4yNDMgNjcuNzU3IDI4OCAxMjggMjg4QzE4OC4yNDMgMjg4IDIzNiAyNDAuMjQzIDIzNiAxODBDMjM2IDExOS43NTcgMTg4LjI0MyA3MiAxMjggNzJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K', sizes: '256x256', type: 'image/svg+xml' },
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik02NCAzNkMzMy43NSAzNiAxMiA1Ny43NSAxMiA4OEMxMiAxMTguMjUgMzMuNzUgMTQwIDY0IDE0MEM5NC4yNSAxNDAgMTE2IDExOC4yNSAxMTYgODhDMTE2IDU3Ljc1IDk0LjI1IDM2IDY0IDM2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '128x128', type: 'image/svg+xml' },
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0zMiAxOEMxNi45NzUgMTggNSAyOS45NzUgNSA0NUM1IDYwLjAyNSAxNi45NzUgNzIgMzIgNzJDNDcuMDI1IDcyIDU5IDYwLjAyNSA1OSA0NUM1OSAyOS45NzUgNDcuMDI1IDE4IDMyIDE4WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '64x64', type: 'image/svg+xml' }
+                    ]
+                });
+                logEvent(`媒体会话元数据更新: ${title} - ${artist}`, 'system');
+            }
+        }
+
+        // 模拟进度更新（用于媒体会话位置状态）
+        function simulateProgressUpdate() {
+            if (!isSpeaking || !('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) {
+                return;
+            }
+
+            let position = 0;
+            const duration = 60; // 假设60秒
+            const interval = setInterval(() => {
+                if (!isSpeaking) {
+                    clearInterval(interval);
+                    return;
+                }
+
+                position += 0.5; // 每500ms更新一次
+                navigator.mediaSession.setPositionState({
+                    duration: duration,
+                    position: Math.min(position, duration),
+                    playbackRate: 1
+                });
+
+                if (position >= duration) {
+                    clearInterval(interval);
+                }
+            }, 500);
+        }
+
         // 设置系统语音合成事件监听
         function setupSystemEventListeners() {
             if (!window.speechSynthesis) {
@@ -143,6 +217,7 @@
                 logEvent('系统事件: 开始朗读 (onstart)', 'system');
                 isSpeaking = true;
                 updateStatus('正在朗读');
+                updateMediaSessionState('playing');
             };
 
             // 监听系统暂停朗读事件
@@ -150,6 +225,7 @@
                 logEvent('系统事件: 暂停朗读 (onpause)', 'system');
                 isSpeaking = false;
                 updateStatus('已暂停');
+                updateMediaSessionState('paused');
             };
 
             // 监听系统恢复朗读事件
@@ -157,6 +233,7 @@
                 logEvent('系统事件: 恢复朗读 (onresume)', 'system');
                 isSpeaking = true;
                 updateStatus('正在朗读');
+                updateMediaSessionState('playing');
             };
 
             // 监听系统结束朗读事件
@@ -164,6 +241,7 @@
                 logEvent('系统事件: 结束朗读 (onend)', 'system');
                 isSpeaking = false;
                 updateStatus('朗读结束');
+                updateMediaSessionState('none');
             };
 
             // 监听系统错误事件
@@ -171,6 +249,7 @@
                 logEvent(`系统事件: 错误 (onerror) - ${event.error}`, 'error');
                 isSpeaking = false;
                 updateStatus('发生错误');
+                updateMediaSessionState('none');
             };
 
             // 设置媒体会话事件监听
@@ -192,14 +271,58 @@
                     window.speechSynthesis.cancel();
                 });
 
-                // 设置媒体会话元数据
+                // 添加上一首/下一首事件处理（虽然语音合成不支持，但可以用于测试）
+                navigator.mediaSession.setActionHandler('previoustrack', () => {
+                    logEvent('媒体会话事件: 上一首', 'system');
+                });
+
+                navigator.mediaSession.setActionHandler('nexttrack', () => {
+                    logEvent('媒体会话事件: 下一首', 'system');
+                });
+
+                // 添加seek操作处理
+                navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                    const seekTime = details.seekOffset || 10;
+                    logEvent(`媒体会话事件: 快退 ${seekTime} 秒`, 'system');
+                    // 更新媒体会话位置状态（模拟）
+                    if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+                        navigator.mediaSession.setPositionState({
+                            duration: 60,
+                            position: Math.max(0, 30 - seekTime),
+                            playbackRate: 1
+                        });
+                    }
+                });
+
+                navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                    const seekTime = details.seekOffset || 10;
+                    logEvent(`媒体会话事件: 快进 ${seekTime} 秒`, 'system');
+                    // 更新媒体会话位置状态（模拟）
+                    if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+                        navigator.mediaSession.setPositionState({
+                            duration: 60,
+                            position: Math.min(60, 30 + seekTime),
+                            playbackRate: 1
+                        });
+                    }
+                });
+
+                // 设置媒体会话元数据 - 优化Android通知显示
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: '系统事件测试',
                     artist: '语音合成测试',
-                    album: '测试模式'
+                    album: '测试模式',
+                    artwork: [
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0xMjggNzJDNjcuNzU3IDcyIDIwIDExOS43NTcgMjAgMTgwQzIwIDI0MC4yNDMgNjcuNzU3IDI4OCAxMjggMjg4QzE4OC4yNDMgMjg4IDIzNiAyNDAuMjQzIDIzNiAxODBDMjM2IDExOS43NTcgMTg4LjI0MyA3MiAxMjggNzJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K', sizes: '256x256', type: 'image/svg+xml' },
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik02NCAzNkMzMy43NSAzNiAxMiA1Ny43NSAxMiA4OEMxMiAxMTguMjUgMzMuNzUgMTQwIDY0IDE0MEM5NC4yNSAxNDAgMTE2IDExOC4yNSAxMTYgODhDMTE2IDU3Ljc1IDk0LjI1IDM2IDY0IDM2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '128x128', type: 'image/svg+xml' },
+                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0zMiAxOEMxNi45NzUgMTggNSAyOS45NzUgNSA0NUM1IDYwLjAyNSAxNi45NzUgNzIgMzIgNzJDNDcuMDI1IDcyIDU5IDYwLjAyNSA1OSA0NUM1OSAyOS45NzUgNDcuMDI1IDE4IDMyIDE4WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '64x64', type: 'image/svg+xml' }
+                    ]
                 });
 
-                logEvent('媒体会话API已初始化', 'system');
+                // 设置播放状态
+                navigator.mediaSession.playbackState = 'none';
+
+                logEvent('媒体会话API已初始化 - Android通知控制已启用', 'system');
             }
 
             // 设置页面可见性变化监听
@@ -231,6 +354,21 @@
 
             logEvent('用户操作: 开始朗读', 'user');
             
+            // 更新媒体会话元数据
+            updateMediaSessionMetadata('系统事件测试 - 朗读中', '语音合成测试', '测试模式');
+            
+            // 设置媒体会话位置状态（模拟进度）
+            if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+                navigator.mediaSession.setPositionState({
+                    duration: 60,
+                    position: 0,
+                    playbackRate: 1
+                });
+            }
+            
+            // 开始模拟进度更新
+            simulateProgressUpdate();
+            
             // 创建测试文本
             const testText = "这是一个系统语音合成事件监听测试。请观察事件日志中的系统事件响应。";
             utterance = new SpeechSynthesisUtterance(testText);
@@ -249,6 +387,9 @@
             }
 
             window.speechSynthesis.speak(utterance);
+            
+            // 更新媒体会话播放状态
+            updateMediaSessionState('playing');
         }
 
         // 测试暂停朗读
@@ -282,6 +423,28 @@
 
             logEvent('用户操作: 停止朗读', 'user');
             window.speechSynthesis.cancel();
+            
+            // 更新媒体会话播放状态
+            updateMediaSessionState('none');
+            
+            // 清除位置状态
+            if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+                navigator.mediaSession.setPositionState(null);
+            }
+        }
+
+        // 空格键切换播放/暂停状态
+        function togglePlayPause() {
+            if (isSpeaking) {
+                // 如果正在朗读，则暂停
+                testPauseSpeaking();
+            } else if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+                // 如果朗读已暂停，则恢复
+                testResumeSpeaking();
+            } else {
+                // 否则开始朗读
+                testStartSpeaking();
+            }
         }
 
         // 清空日志
@@ -297,6 +460,15 @@
         document.getElementById('testResume').addEventListener('click', testResumeSpeaking);
         document.getElementById('testStop').addEventListener('click', testStopSpeaking);
         document.getElementById('clearLog').addEventListener('click', clearLog);
+
+        // 空格键控制播放/暂停
+        document.addEventListener('keydown', (event) => {
+            // 检查是否按下了空格键 (keyCode 32 或 key === ' ')
+            if (event.code === 'Space' || event.keyCode === 32) {
+                event.preventDefault(); // 防止页面滚动
+                togglePlayPause();
+            }
+        });
 
         // 初始化
         window.addEventListener('DOMContentLoaded', () => {
