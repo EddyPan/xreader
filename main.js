@@ -9,20 +9,10 @@
  * 4. 初始化语音合成系统
  * 5. 绑定所有UI事件监听器
  * 6. 设置键盘快捷键
- * 7. 设置系统语音合成事件监听
  */
 window.addEventListener('DOMContentLoaded', async () => {
   await openDB();
   await refreshBookList();
-  
-  // 设置系统语音合成事件监听
-  setupSpeechEventListeners();
-  
-  // 设置媒体会话事件监听（支持浏览器媒体控制）
-  setupMediaSession();
-  
-  // 设置页面可见性变化监听
-  setupVisibilityChange();
 
   // 如果有上次阅读的书，自动打开
   const meta = localStorage.getItem('NovelReaderMeta');
@@ -226,18 +216,4 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnToggleList').onclick = () => toggleBookList();
   document.getElementById('btnCloseList').onclick = () => toggleBookList(false);
   document.getElementById('bookListOverlay').onclick = () => toggleBookList(false);
-});
-
-/**
- * 页面卸载时清理事件监听器
- * 防止内存泄漏和事件冲突
- */
-window.addEventListener('beforeunload', () => {
-  // 移除系统语音合成事件监听
-  removeSpeechEventListeners();
-  
-  // 停止任何正在进行的朗读
-  if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
 });

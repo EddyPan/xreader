@@ -350,143 +350,9 @@ function updateSpeakButton() {
 }
 
 /**
- * 监听系统语音合成事件
- * 监听系统级别的开始、暂停、结束事件，同步更新UI状态
- */
-function setupSpeechEventListeners() {
-  if (!window.speechSynthesis) return;
-  
-  // 监听系统开始朗读事件
-  window.speechSynthesis.onstart = function(event) {
-    console.log('系统开始朗读事件触发');
-    if (!isSpeaking) {
-      isSpeaking = true;
-      updateSpeakButton();
-    }
-  };
-  
-  // 监听系统暂停朗读事件
-  window.speechSynthesis.onpause = function(event) {
-    console.log('系统暂停朗读事件触发');
-    if (isSpeaking) {
-      isSpeaking = false;
-      updateSpeakButton();
-    }
-  };
-  
-  // 监听系统恢复朗读事件
-  window.speechSynthesis.onresume = function(event) {
-    console.log('系统恢复朗读事件触发');
-    if (!isSpeaking) {
-      isSpeaking = true;
-      updateSpeakButton();
-    }
-  };
-  
-  // 监听系统结束朗读事件
-  window.speechSynthesis.onend = function(event) {
-    console.log('系统结束朗读事件触发');
-    if (isSpeaking) {
-      isSpeaking = false;
-      updateSpeakButton();
-      // 清除高亮
-      const viewport = document.getElementById('viewport');
-      const prevHighlighted = viewport.querySelector('.speaking-paragraph');
-      if (prevHighlighted) {
-        prevHighlighted.classList.remove('speaking-paragraph');
-      }
-    }
-  };
-  
-  // 监听系统错误事件
-  window.speechSynthesis.onerror = function(event) {
-    console.error('系统语音合成错误:', event.error);
-    isSpeaking = false;
-    updateSpeakButton();
-    // 清除高亮
-    const viewport = document.getElementById('viewport');
-    const prevHighlighted = viewport.querySelector('.speaking-paragraph');
-    if (prevHighlighted) {
-      prevHighlighted.classList.remove('speaking-paragraph');
-    }
-  };
-}
-
-/**
- * 移除系统语音合成事件监听
- * 用于清理事件监听器，避免内存泄漏
- */
-function removeSpeechEventListeners() {
-  if (!window.speechSynthesis) return;
-  
-  window.speechSynthesis.onstart = null;
-  window.speechSynthesis.onpause = null;
-  window.speechSynthesis.onresume = null;
-  window.speechSynthesis.onend = null;
-  window.speechSynthesis.onerror = null;
-}
-
-/**
- * 设置媒体会话事件监听
- * 支持浏览器媒体控制（如媒体键、通知栏控制）
- */
-function setupMediaSession() {
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => {
-      console.log('媒体会话播放事件');
-      startSpeaking();
-    });
-    
-    navigator.mediaSession.setActionHandler('pause', () => {
-      console.log('媒体会话暂停事件');
-      if (isSpeaking) {
-        window.speechSynthesis.pause();
-        isSpeaking = false;
-        updateSpeakButton();
-      }
-    });
-    
-    navigator.mediaSession.setActionHandler('stop', () => {
-      console.log('媒体会话停止事件');
-      stopSpeaking();
-    });
-    
-    // 设置媒体会话元数据
-    if (currentBook) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: `朗读: ${currentBook.name}`,
-        artist: '小说阅读器',
-        album: '朗读模式'
-      });
-    }
-  }
-}
-
-/**
- * 设置页面可见性变化监听
- * 当页面隐藏时暂停朗读，显示时恢复
- */
-function setupVisibilityChange() {
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && isSpeaking) {
-      console.log('页面隐藏，暂停朗读');
-      window.speechSynthesis.pause();
-      isSpeaking = false;
-      updateSpeakButton();
-    } else if (!document.hidden && window.speechSynthesis.paused && window.speechSynthesis.speaking) {
-      console.log('页面显示，恢复朗读');
-      window.speechSynthesis.resume();
-      isSpeaking = true;
-      updateSpeakButton();
-    }
-  });
-}
-
-/**
  * 开始或暂停朗读功能
  * 处理三种状态：开始朗读、暂停朗读、恢复朗读
  * 从当前阅读进度或保存的段落位置开始朗读
- * 增强系统事件监听，确保状态同步
  */
 function startSpeaking() {
   if (!currentBook) return;
@@ -508,7 +374,6 @@ function startSpeaking() {
     window.speechSynthesis.pause();
     isSpeaking = false;
     updateSpeakButton();
-    console.log('用户手动暂停朗读');
     return;
   }
    
@@ -517,7 +382,6 @@ function startSpeaking() {
     window.speechSynthesis.resume();
     isSpeaking = true;
     updateSpeakButton();
-    console.log('用户手动恢复朗读');
     return;
   }
    
@@ -566,7 +430,6 @@ function startSpeaking() {
  * 停止朗读功能
  * 完全取消当前的语音合成，保存当前断点位置
  * 停止朗读时保留当前段落位置，便于下次继续
- * 增强系统事件处理，确保状态正确同步
  */
 function stopSpeaking() {
   if (!currentBook) return;
@@ -578,15 +441,7 @@ function stopSpeaking() {
   // 保存当前断点位置，不重置到页面开始
   saveReadingProgress();
   
-  // 清除高亮显示
-  const viewport = document.getElementById('viewport');
-  const prevHighlighted = viewport.querySelector('.speaking-paragraph');
-  if (prevHighlighted) {
-    prevHighlighted.classList.remove('speaking-paragraph');
-  }
-  
   updateSpeakButton();
-  console.log('用户手动停止朗读');
 }
 
 /**
@@ -691,15 +546,6 @@ function openBook(book) {
 
   // 初始化朗读按钮状态
   updateSpeakButton();
-  
-  // 更新媒体会话元数据
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: `朗读: ${book.name}`,
-      artist: '小说阅读器',
-      album: '朗读模式'
-    });
-  }
 
   // 渲染页面
   renderPage();
