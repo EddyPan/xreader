@@ -212,6 +212,8 @@
                 return;
             }
 
+            logEvent('开始设置系统事件监听器...', 'system');
+
             // 监听系统开始朗读事件
             window.speechSynthesis.onstart = function(event) {
                 logEvent('系统事件: 开始朗读 (onstart)', 'system');
@@ -254,6 +256,43 @@
 
             // 设置媒体会话事件监听
             if ('mediaSession' in navigator) {
+                logEvent('检测到Media Session API支持', 'system');
+                
+                try {
+                    // 清除之前的处理器（防止重复设置）
+                    navigator.mediaSession.setActionHandler('play', null);
+                    navigator.mediaSession.setActionHandler('pause', null);
+                    navigator.mediaSession.setActionHandler('stop', null);
+                    navigator.mediaSession.setActionHandler('previoustrack', null);
+                    navigator.mediaSession.setActionHandler('nexttrack', null);
+                    navigator.mediaSession.setActionHandler('seekbackward', null);
+                    navigator.mediaSession.setActionHandler('seekforward', null);
+                } catch (e) {
+                    logEvent(`清除旧处理器时出错: ${e.message}`, 'error');
+                }
+
+                // 检查是否支持所有必需的处理器
+                const supportedHandlers = [];
+                try {
+                    // 测试播放处理器
+                    navigator.mediaSession.setActionHandler('play', () => {});
+                    navigator.mediaSession.setActionHandler('play', null);
+                    supportedHandlers.push('play');
+                } catch (e) {
+                    logEvent(`播放处理器不支持: ${e.message}`, 'warning');
+                }
+
+                try {
+                    // 测试暂停处理器
+                    navigator.mediaSession.setActionHandler('pause', () => {});
+                    navigator.mediaSession.setActionHandler('pause', null);
+                    supportedHandlers.push('pause');
+                } catch (e) {
+                    logEvent(`暂停处理器不支持: ${e.message}`, 'warning');
+                }
+
+                logEvent(`支持的媒体会话处理器: ${supportedHandlers.join(', ')}`, 'system');
+
                 navigator.mediaSession.setActionHandler('play', () => {
                     logEvent('媒体会话事件: 播放', 'system');
                     testStartSpeaking();
@@ -308,21 +347,25 @@
                 });
 
                 // 设置媒体会话元数据 - 优化Android通知显示
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: '系统事件测试',
-                    artist: '语音合成测试',
-                    album: '测试模式',
-                    artwork: [
-                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0xMjggNzJDNjcuNzU3IDcyIDIwIDExOS43NTcgMjAgMTgwQzIwIDI0MC4yNDMgNjcuNzU3IDI4OCAxMjggMjg4QzE4OC4yNDMgMjg4IDIzNiAyNDAuMjQzIDIzNiAxODBDMjM2IDExOS43NTcgMTg4LjI0MyA3MiAxMjggNzJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K', sizes: '256x256', type: 'image/svg+xml' },
-                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik02NCAzNkMzMy43NSAzNiAxMiA1Ny43NSAxMiA4OEMxMiAxMTguMjUgMzMuNzUgMTQwIDY0IDE0MEM5NC4yNSAxNDAgMTE2IDExOC4yNSAxMTYgODhDMTE2IDU3Ljc1IDk0LjI1IDM2IDY0IDM2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '128x128', type: 'image/svg+xml' },
-                        { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0zMiAxOEMxNi45NzUgMTggNSAyOS45NzUgNSA0NUM1IDYwLjAyNSAxNi45NzUgNzIgMzIgNzJDNDcuMDI1IDcyIDU5IDYwLjAyNSA1OSA0NUM1OSAyOS45NzUgNDcuMDI1IDE4IDMyIDE4WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '64x64', type: 'image/svg+xml' }
-                    ]
-                });
+                try {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: '系统事件测试',
+                        artist: '语音合成测试',
+                        album: '测试模式',
+                        artwork: [
+                            { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgdmlld0JveD0iMCAwIDI1NiAyNTYiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0xMjggNzJDNjcuNzU3IDcyIDIwIDExOS43NTcgMjAgMTgwQzIwIDI0MC4yNDMgNjcuNzU3IDI4OCAxMjggMjg4QzE4OC4yNDMgMjg4IDIzNiAyNDAuMjQzIDIzNiAxODBDMjM2IDExOS43NTcgMTg4LjI0MyA3MiAxMjggNzJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K', sizes: '256x256', type: 'image/svg+xml' },
+                            { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgdmlld0JveD0iMCAwIDEyOCAxMjgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik02NCAzNkMzMy43NSAzNiAxMiA1Ny43NSAxMiA4OEMxMiAxMTguMjUgMzMuNzUgMTQwIDY0IDE0MEM5NC4yNSAxNDAgMTE2IDExOC4yNSAxMTYgODhDMTE2IDU3Ljc1IDk0LjI1IDM2IDY0IDM2WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '128x128', type: 'image/svg+xml' },
+                            { src: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjNDI4NUY0Ii8+CjxwYXRoIGQ9Ik0zMiAxOEMxNi45NzUgMTggNSAyOS45NzUgNSA0NUM1IDYwLjAyNSAxNi45NzUgNzIgMzIgNzJDNDcuMDI1IDcyIDU5IDYwLjAyNSA1OSA0NUM1OSAyOS45NzUgNDcuMDI1IDE4IDMyIDE4WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==', sizes: '64x64', type: 'image/svg+xml' }
+                        ]
+                    });
 
-                // 设置播放状态
-                navigator.mediaSession.playbackState = 'none';
+                    // 设置播放状态
+                    navigator.mediaSession.playbackState = 'none';
 
-                logEvent('媒体会话API已初始化 - Android通知控制已启用', 'system');
+                    logEvent('媒体会话API已初始化 - Android通知控制已启用', 'system');
+                } catch (e) {
+                    logEvent(`设置媒体会话元数据时出错: ${e.message}`, 'error');
+                }
             }
 
             // 设置页面可见性变化监听
@@ -338,6 +381,32 @@
 
             logEvent('系统事件监听器已设置', 'system');
             updateStatus('事件监听器已就绪');
+            
+            // 添加页面可见性变化监听，处理后台恢复时的状态同步
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && 'mediaSession' in navigator) {
+                    logEvent('页面从后台恢复，同步媒体会话状态', 'system');
+                    // 重新设置处理器，防止后台时被系统清除
+                    try {
+                        navigator.mediaSession.setActionHandler('play', () => {
+                            logEvent('媒体会话事件: 播放 (恢复后)', 'system');
+                            testStartSpeaking();
+                        });
+                        
+                        navigator.mediaSession.setActionHandler('pause', () => {
+                            logEvent('媒体会话事件: 暂停 (恢复后)', 'system');
+                            testStopSpeaking();
+                        });
+                        
+                        navigator.mediaSession.setActionHandler('stop', () => {
+                            logEvent('媒体会话事件: 停止 (恢复后)', 'system');
+                            testStopSpeaking();
+                        });
+                    } catch (e) {
+                        logEvent(`恢复媒体会话处理器时出错: ${e.message}`, 'error');
+                    }
+                }
+            });
         }
 
         // 测试开始朗读
@@ -470,16 +539,38 @@
             }
         });
 
+        // 初始化页面
+        function initializePage() {
+            logEvent('页面初始化开始...', 'system');
+            
+            // 延迟初始化媒体会话，确保页面完全加载
+            setTimeout(() => {
+                setupSystemEventListeners();
+                updateStatus('系统事件测试页面已就绪');
+                
+                // 尝试主动激活媒体会话
+                if ('mediaSession' in navigator) {
+                    try {
+                        // 先设置基础状态
+                        navigator.mediaSession.playbackState = 'none';
+                        logEvent('媒体会话基础状态已设置', 'system');
+                    } catch (e) {
+                        logEvent(`设置基础媒体会话状态时出错: ${e.message}`, 'error');
+                    }
+                }
+            }, 500); // 延迟500ms确保DOM完全加载
+        }
+
         // 初始化
         window.addEventListener('DOMContentLoaded', () => {
             // 等待语音列表加载
             if (window.speechSynthesis) {
                 if (window.speechSynthesis.getVoices().length === 0) {
                     window.speechSynthesis.onvoiceschanged = () => {
-                        setupSystemEventListeners();
+                        initializePage();
                     };
                 } else {
-                    setupSystemEventListeners();
+                    initializePage();
                 }
             } else {
                 updateStatus('浏览器不支持语音合成API');
