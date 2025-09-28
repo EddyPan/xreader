@@ -216,4 +216,70 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnToggleList').onclick = () => toggleBookList();
   document.getElementById('btnCloseList').onclick = () => toggleBookList(false);
   document.getElementById('bookListOverlay').onclick = () => toggleBookList(false);
+
+  // 显示/隐藏搜索
+  function toggleSearch(show) {
+    const overlay = document.getElementById('searchOverlay');
+    const container = document.getElementById('searchContainer');
+    
+    if (show === undefined) {
+      show = !container.classList.contains('show');
+    }
+    
+    if (show) {
+      overlay.classList.add('show');
+      container.classList.add('show');
+      document.body.style.overflow = 'hidden'; // 防止背景滚动
+      document.getElementById('searchInput').focus();
+    } else {
+      overlay.classList.remove('show');
+      container.classList.remove('show');
+      document.body.style.overflow = ''; // 恢复滚动
+    }
+  }
+
+  document.getElementById('btnToggleSearch').onclick = () => toggleSearch();
+  document.getElementById('btnCloseSearch').onclick = () => toggleSearch(false);
+  document.getElementById('searchOverlay').onclick = () => toggleSearch(false);
+
+  // 执行搜索
+  async function performSearch() {
+    const query = document.getElementById('searchInput').value;
+    const results = searchInBook(query);
+    const resultsEl = document.getElementById('searchResults');
+    resultsEl.innerHTML = '';
+
+    if (results.length === 0) {
+      resultsEl.innerHTML = '<div class="list-item">没有找到匹配的结果</div>';
+      return;
+    }
+
+    results.forEach(result => {
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      div.innerHTML = highlightSearchTerm(result.text, query);
+      div.onclick = () => {
+        const page = Math.floor(result.index / pageSize);
+        currentPage = page;
+        renderPage();
+        setTimeout(() => {
+          const p = document.querySelector(`[data-index="${result.index}"]`);
+          if (p) {
+            p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            p.classList.add('speaking-paragraph');
+            setTimeout(() => p.classList.remove('speaking-paragraph'), 2000);
+          }
+        }, 100);
+        toggleSearch(false);
+      };
+      resultsEl.appendChild(div);
+    });
+  }
+
+  document.getElementById('btnSearch').onclick = performSearch;
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      performSearch();
+    }
+  });
 });

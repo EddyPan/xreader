@@ -206,6 +206,39 @@ function prevPage() {
   }
 }
 
+// ---------------- 搜索功能 ----------------
+/**
+ * 在当前书籍中搜索关键词
+ * @param {string} query - 搜索关键词
+ * @returns {Array<{index: number, text: string}>} - 匹配的段落列表，包含索引和文本
+ */
+function searchInBook(query) {
+  if (!currentBook || !query) return [];
+
+  const results = [];
+  const lowerCaseQuery = query.toLowerCase();
+
+  currentBook.paras.forEach((p, index) => {
+    if (p.toLowerCase().includes(lowerCaseQuery)) {
+      results.push({ index, text: p });
+    }
+  });
+
+  return results;
+}
+
+/**
+ * 高亮显示搜索结果中的关键词
+ * @param {string} text - 原始文本
+ * @param {string} query - 搜索关键词
+ * @returns {string} - 包含高亮标签的HTML字符串
+ */
+function highlightSearchTerm(text, query) {
+  if (!query) return text;
+  const regex = new RegExp(`(${query})`, 'gi');
+  return text.replace(regex, '<span class="highlight">$1</span>');
+}
+
 // ---------------- 朗读功能 ----------------
 
 /**

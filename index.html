@@ -18,6 +18,20 @@
       <div class="list" id="bookList"></div>
     </div>
 
+    <!-- 搜索抽屉/弹窗 -->
+    <div class="search-overlay" id="searchOverlay"></div>
+    <div class="search-container" id="searchContainer">
+      <div class="search-header">
+        <h3>搜索</h3>
+        <button id="btnCloseSearch" class="close-btn">&times;</button>
+      </div>
+      <div class="search-input-container">
+        <input type="text" id="searchInput" placeholder="输入关键词搜索...">
+        <button id="btnSearch">搜索</button>
+      </div>
+      <div class="list" id="searchResults"></div>
+    </div>
+
     <header>
       <h1>阅读器</h1>
       <div class="controls">
@@ -25,6 +39,7 @@
           打开文件<input id="fileInput" type="file" accept=".txt" style="display:none">
         </label>
         <button id="btnToggleList" class="ghost">阅读列表</button>
+        <button id="btnToggleSearch" class="ghost">搜索</button>
       </div>
     </header>
 
