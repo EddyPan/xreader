@@ -576,6 +576,7 @@ function openBook(book) {
   document.getElementById('bookTitle').textContent = book.name;
   document.getElementById('reader').classList.remove('hidden');
   document.getElementById('dropzone').classList.add('hidden');
+  document.getElementById('btnToggleSearch').style.display = 'inline-flex';
 
   // 初始化朗读按钮状态
   updateSpeakButton();
@@ -654,6 +655,7 @@ async function refreshBookList() {
             currentBook = null;
             document.getElementById('reader').classList.add('hidden');
             document.getElementById('dropzone').classList.remove('hidden');
+            document.getElementById('btnToggleSearch').style.display = 'none';
           }
           // 刷新列表
           await refreshBookList();

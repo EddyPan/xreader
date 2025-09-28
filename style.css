@@ -18,7 +18,6 @@ h1 {
 /* 统一按钮基础样式 */
 button, .file-pill {
   font: inherit;
-  padding: 6px 12px;
   border: 1px solid #ccc;
   border-radius: 6px;
   background: white;
@@ -62,6 +61,10 @@ header .controls {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+#btnToggleSearch {
+  display: none;
 }
 
 /* ========== 拖拽区 ========== */
@@ -466,7 +469,6 @@ header .controls {
 .meta {
   display: flex;
   justify-content: space-between;
-  padding: 6px 12px;
   font-size: 0.85rem;
   color: #666;
   background: #f9f9f9;
@@ -490,7 +492,6 @@ header .controls {
 
 .fullscreen .reader-header,
 .fullscreen .pager {
-  opacity: 0;
   transition: opacity 0.3s ease;
 }
 
@@ -581,7 +582,6 @@ header .controls {
   .reader-header button,
   .pager button,
   .speech-controls button {
-    padding: 6px 12px !important;
     font-size: 0.9rem !important;
   }
   
@@ -612,7 +612,6 @@ header .controls {
   }
   
   .speech-controls button {
-    padding: 6px 12px;
     font-size: 0.9rem;
   }
   
@@ -636,7 +635,6 @@ header .controls {
   }
   
   .pager button {
-    padding: 6px 12px;
     font-size: 0.9rem;
   }
   
