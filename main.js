@@ -12,6 +12,68 @@
  */
 window.addEventListener('DOMContentLoaded', async () => {
   await openDB();
+
+  // ---------------- 书籍列表 ----------------
+  /**
+   * 刷新书籍列表显示
+   * 从数据库获取所有书籍，创建可点击的书籍项
+   * 每个书籍项包含书名和删除按钮
+   * 点击书籍项时会加载完整书籍信息并打开阅读
+   * 点击删除按钮会删除对应书籍
+   */
+  async function refreshBookList() {
+    const listEl = document.getElementById('bookList');
+    listEl.innerHTML = '';
+
+    const books = await getAllBooks();
+    books.forEach(b => {
+      const div = document.createElement('div');
+      div.className = 'book-item';
+      
+      // 创建书籍名称元素
+      const bookName = document.createElement('span');
+      bookName.className = 'book-name';
+      bookName.textContent = b.name;
+      bookName.onclick = async () => {
+        const full = await getBook(b.id);
+        openBook(full);
+        // 打开书籍后自动关闭阅读列表
+        document.getElementById('bookListOverlay').classList.remove('show');
+        document.getElementById('bookListContainer').classList.remove('show');
+        document.body.style.overflow = '';
+      };
+      
+      // 创建删除按钮
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.textContent = '删除';
+      deleteBtn.onclick = async (e) => {
+        e.stopPropagation(); // 阻止事件冒泡
+        if (confirm(`确定要删除《${b.name}》吗？`)) {
+          try {
+            await deleteBookAndNotify(b.id);
+            // 如果删除的是当前正在阅读的书籍，清空当前书籍
+            if (currentBook && currentBook.id === b.id) {
+              currentBook = null;
+              document.getElementById('reader').classList.add('hidden');
+              document.getElementById('dropzone').classList.remove('hidden');
+              document.getElementById('btnToggleSearch').style.display = 'none';
+            }
+          } catch (error) {
+            console.error('删除书籍失败:', error);
+            alert('删除失败，请重试');
+          }
+        }
+      };
+      
+      div.appendChild(bookName);
+      div.appendChild(deleteBtn);
+      listEl.appendChild(div);
+    });
+  }
+
+  window.addEventListener('bookdeleted', refreshBookList);
+
   await refreshBookList();
 
   // 如果有上次阅读的书，自动打开
@@ -131,7 +193,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
   
   function handleSwipe() {
-    const swipeThreshold = 50; // 滑动阈值
+    const swipeThreshold = 100; // 滑动阈值
     const diff = touchStartX - touchEndX;
     
     if (Math.abs(diff) > swipeThreshold) {
@@ -280,6 +342,94 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       performSearch();
+    }
+  });
+
+  // 显示/隐藏同步设置
+  async function toggleSyncSettings(show) {
+    const overlay = document.getElementById('syncSettingsOverlay');
+    const container = document.getElementById('syncSettingsContainer');
+    
+    if (show === undefined) {
+      show = !container.classList.contains('show');
+    }
+    
+    if (show) {
+      const settings = await getSyncSettings();
+      if (settings) {
+        document.getElementById('syncUrl').value = settings.syncUrl || '';
+        document.getElementById('syncToken').value = settings.syncToken || '';
+      }
+      overlay.classList.add('show');
+      container.classList.add('show');
+      document.body.style.overflow = 'hidden'; // 防止背景滚动
+    } else {
+      overlay.classList.remove('show');
+      container.classList.remove('show');
+      document.body.style.overflow = ''; // 恢复滚动
+    }
+  }
+
+  // 初始化同步按钮状态
+  async function initSyncButton() {
+    const settings = await getSyncSettings();
+    const btnToggleSync = document.getElementById('btnToggleSync');
+    if (settings && settings.syncUrl) {
+      btnToggleSync.style.display = 'inline-flex';
+      if (btnToggleSync.classList.contains('active')) {
+        btnToggleSync.textContent = '关闭同步';
+      } else {
+        btnToggleSync.textContent = '开启同步';
+      }
+    } else {
+      btnToggleSync.style.display = 'none';
+    }
+  }
+  initSyncButton();
+
+  document.getElementById('btnToggleSync').addEventListener('click', async () => {
+    const btnToggleSync = document.getElementById('btnToggleSync');
+    btnToggleSync.classList.toggle('active');
+    initSyncButton();
+    if (btnToggleSync.classList.contains('active')) {
+      if (confirm('是否同步当前阅读进度？')) {
+        fetchAndApplySyncProgress(currentBook);
+      }
+    }
+  });
+
+  document.getElementById('btnSyncSettings').addEventListener('click', () => {
+    toggleSyncSettings(true);
+  });
+
+  document.getElementById('btnCloseSyncSettings').onclick = () => toggleSyncSettings(false);
+  document.getElementById('syncSettingsOverlay').onclick = () => toggleSyncSettings(false);
+
+  document.getElementById('btnSaveSyncSettings').addEventListener('click', async () => {
+    const syncUrl = document.getElementById('syncUrl').value;
+    const syncToken = document.getElementById('syncToken').value;
+
+    if (!syncUrl) {
+      alert('同步接口地址不能为空');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${syncUrl}/health`);
+      if (response.ok) {
+        await saveSyncSettings({ syncUrl, syncToken });
+        toggleSyncSettings(false);
+        const btnToggleSync = document.getElementById('btnToggleSync');
+        btnToggleSync.classList.add('active');
+        initSyncButton();
+        if (confirm('同步设置已保存，是否立即同步当前阅读进度？')) {
+          fetchAndApplySyncProgress(currentBook);
+        }
+      } else {
+        alert('健康检查失败，请检查同步接口地址');
+      }
+    } catch (error) {
+      alert('健康检查请求失败，请检查网络连接和接口地址');
     }
   });
 });

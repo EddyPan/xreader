@@ -241,6 +241,129 @@ function highlightSearchTerm(text, query) {
 
 // ---------------- 朗读功能 ----------------
 
+let syncTimeout;
+
+/**
+ * 同步书籍内容到远程服务器
+ * @param {Object} book - 书籍对象
+ * @param {Object} settings - 同步设置
+ */
+async function syncBookContent(book, settings) {
+  try {
+    const response = await fetch(`${settings.syncUrl}/book`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.syncToken}`,
+      },
+      body: JSON.stringify({
+        bookId: book.id,
+        content: book.text,
+      }),
+    });
+
+    if (response.ok) {
+      book.synced = true;
+      await saveBook(book);
+    } else {
+      console.error('同步书籍内容失败:', response.statusText);
+    }
+  } catch (error) {
+    console.error('同步书籍内容请求失败:', error);
+  }
+}
+
+/**
+ * 获取并应用同步的阅读进度
+ * @param {Object} book - 书籍对象
+ */
+async function fetchAndApplySyncProgress(book) {
+  console.log('Fetching and applying sync progress for book:', book.id);
+  const settings = await getSyncSettings();
+  if (!settings || !settings.syncUrl) {
+    console.log('Sync settings not found. Aborting sync.');
+    return;
+  }
+
+  console.log('Sync settings found:', settings);
+  try {
+    const url = `${settings.syncUrl}/sync/${book.id}`;
+    console.log('Fetching from URL:', url);
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${settings.syncToken}`,
+      },
+    });
+
+    console.log('Fetch response:', response);
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('Sync data received:', data);
+      if (data.progress) {
+        const remoteProgress = data.progress;
+        const localProgress = book.progress || { page: 0, paraIndex: 0 };
+
+        if (remoteProgress.paraIndex > localProgress.paraIndex) {
+          if (confirm(`检测到云端有新的阅读进度 (第${remoteProgress.page + 1}页)，是否同步？`)) {
+            currentPage = remoteProgress.page;
+            currentParagraphIndex = remoteProgress.paraIndex;
+            renderPage();
+            setTimeout(() => {
+              highlightCurrentParagraph(currentParagraphIndex);
+            }, 100);
+          }
+        }
+      }
+    } else if (response.status !== 200) {
+      alert('获取同步进度失败，请检查网络或服务器状态。');
+      console.error('获取同步进度失败:', response.statusText);
+    }
+  } catch (error) {
+    alert('获取同步进度失败，请检查网络或服务器状态。');
+    console.error('获取同步进度请求失败:', error);
+  }
+}
+
+/**
+ * 同步阅读进度到远程服务器
+ */
+async function syncReadingProgress() {
+  const settings = await getSyncSettings();
+  if (!settings || !settings.syncUrl) {
+    return;
+  }
+
+  if (!currentBook) return;
+
+  if (!currentBook.synced) {
+    await syncBookContent(currentBook, settings);
+  }
+
+  try {
+    const response = await fetch(`${settings.syncUrl}/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.syncToken}`,
+      },
+      body: JSON.stringify({
+        bookId: currentBook.id,
+        progress: {
+          page: currentPage,
+          paraIndex: currentParagraphIndex,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('同步失败:', response.statusText);
+    }
+  } catch (error) {
+    console.error('同步请求失败:', error);
+  }
+}
+
 /**
  * 保存当前阅读进度到数据库
  * 包括当前页码和朗读到的段落索引
@@ -258,6 +381,12 @@ function saveReadingProgress() {
   // 保存到数据库（异步，不阻塞朗读流程）
   saveBook(currentBook).then(() => {
     localStorage.setItem(META_KEY, JSON.stringify({ lastBookId: currentBook.id }));
+
+    // 如果开启了同步，则触发同步
+    if (document.getElementById('btnToggleSync').classList.contains('active')) {
+      clearTimeout(syncTimeout);
+      syncTimeout = setTimeout(syncReadingProgress, 3000); // 3秒防抖
+    }
   }).catch(err => {
     console.warn('保存阅读进度失败:', err);
   });
@@ -422,32 +551,6 @@ function startSpeaking() {
   window.speechSynthesis.cancel();
    
   // 开始新的朗读
-  // 优先使用保存的段落进度，确保从断点继续
-  const savedProgress = currentBook.progress;
-  if (savedProgress?.paraIndex !== undefined) {
-    // 检查保存的段落是否在当前书籍范围内
-    if (savedProgress.paraIndex >= 0 && savedProgress.paraIndex < currentBook.paras.length) {
-      currentParagraphIndex = savedProgress.paraIndex;
-      // 如果保存的段落不在当前页，切换到对应页面
-      const savedPage = Math.floor(savedProgress.paraIndex / pageSize);
-      if (savedPage !== currentPage) {
-        currentPage = savedPage;
-        renderPage();
-        // 等待页面渲染完成
-        setTimeout(() => {
-          if (isSpeaking) {
-            speakNextParagraph();
-          }
-        }, 200);
-        return;
-      }
-    } else {
-      currentParagraphIndex = currentPage * pageSize;
-    }
-  } else {
-    currentParagraphIndex = currentPage * pageSize;
-  }
-  
   isSpeaking = true;
   updateSpeakButton();
    
@@ -545,7 +648,7 @@ function loadVoices(filter = '') {
  * 触发页面渲染显示书籍内容，自动高亮上次阅读位置
  * @param {Object} book - 书籍对象，包含文本、段落等信息
  */
-function openBook(book) {
+async function openBook(book) {
   // 清理之前的朗读状态
   window.speechSynthesis.cancel();
   isSpeaking = false;
@@ -604,7 +707,7 @@ function parseFile(file) {
     reader.onload = e => {
       const text = e.target.result;
       const paras = splitTextToParas(text);
-      resolve({ id: file.name, name: file.name, text, paras, progress: {} });
+      resolve({ id: file.name, name: file.name, text, paras, progress: {}, synced: false });
     };
     reader.onerror = e => reject(e);
     reader.readAsText(file, 'utf-8');
@@ -613,61 +716,11 @@ function parseFile(file) {
 
 // ---------------- 书籍列表 ----------------
 /**
- * 刷新书籍列表显示
- * 从数据库获取所有书籍，创建可点击的书籍项
- * 每个书籍项包含书名和删除按钮
- * 点击书籍项时会加载完整书籍信息并打开阅读
- * 点击删除按钮会删除对应书籍
+ * 从数据库中删除指定书籍
+ * @param {string} id - 要删除的书籍ID
+ * @returns {Promise<void>} 删除完成的Promise
  */
-async function refreshBookList() {
-  const listEl = document.getElementById('bookList');
-  listEl.innerHTML = '';
-
-  const books = await getAllBooks();
-  books.forEach(b => {
-    const div = document.createElement('div');
-    div.className = 'book-item';
-    
-    // 创建书籍名称元素
-    const bookName = document.createElement('span');
-    bookName.className = 'book-name';
-    bookName.textContent = b.name;
-    bookName.onclick = async () => {
-      const full = await getBook(b.id);
-      openBook(full);
-      // 打开书籍后自动关闭阅读列表
-      document.getElementById('bookListOverlay').classList.remove('show');
-      document.getElementById('bookListContainer').classList.remove('show');
-      document.body.style.overflow = '';
-    };
-    
-    // 创建删除按钮
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'delete-btn';
-    deleteBtn.textContent = '删除';
-    deleteBtn.onclick = async (e) => {
-      e.stopPropagation(); // 阻止事件冒泡
-      if (confirm(`确定要删除《${b.name}》吗？`)) {
-        try {
-          await deleteBook(b.id);
-          // 如果删除的是当前正在阅读的书籍，清空当前书籍
-          if (currentBook && currentBook.id === b.id) {
-            currentBook = null;
-            document.getElementById('reader').classList.add('hidden');
-            document.getElementById('dropzone').classList.remove('hidden');
-            document.getElementById('btnToggleSearch').style.display = 'none';
-          }
-          // 刷新列表
-          await refreshBookList();
-        } catch (error) {
-          console.error('删除书籍失败:', error);
-          alert('删除失败，请重试');
-        }
-      }
-    };
-    
-    div.appendChild(bookName);
-    div.appendChild(deleteBtn);
-    listEl.appendChild(div);
-  });
+async function deleteBookAndNotify(id) {
+  await deleteBook(id);
+  window.dispatchEvent(new CustomEvent('bookdeleted'));
 }

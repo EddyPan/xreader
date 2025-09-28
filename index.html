@@ -32,6 +32,22 @@
       <div class="list" id="searchResults"></div>
     </div>
 
+    <!-- 同步设置对话框 -->
+    <div class="sync-settings-overlay" id="syncSettingsOverlay"></div>
+    <div class="sync-settings-container" id="syncSettingsContainer">
+      <div class="sync-settings-header">
+        <h3>同步设置</h3>
+        <button id="btnCloseSyncSettings" class="close-btn">&times;</button>
+      </div>
+      <div class="sync-settings-content">
+        <label for="syncUrl">同步接口地址:</label>
+        <input type="text" id="syncUrl" placeholder="https://example.com/api/sync">
+        <label for="syncToken">Token:</label>
+        <input type="text" id="syncToken" placeholder="Your authentication token">
+        <button id="btnSaveSyncSettings">保存</button>
+      </div>
+    </div>
+
     <header>
       <h1>阅读器</h1>
       <div class="controls">
@@ -40,6 +56,8 @@
         </label>
         <button id="btnToggleList" class="ghost">阅读列表</button>
         <button id="btnToggleSearch" class="ghost">搜索</button>
+        <button id="btnToggleSync" class="ghost">同步</button>
+        <button id="btnSyncSettings" class="ghost">同步设置</button>
       </div>
     </header>
 

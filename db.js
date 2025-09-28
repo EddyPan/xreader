@@ -1,6 +1,7 @@
-// IndexedDB 封装
 const DB_NAME = 'XReaderDB';
-const DB_STORE = 'books';
+const DB_VERSION = 3; // Increment version to trigger onupgradeneeded
+const DB_STORE_BOOKS = 'books';
+const DB_STORE_SETTINGS = 'settings';
 
 let db;
 
@@ -11,11 +12,22 @@ let db;
  */
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(DB_STORE)) {
-        db.createObjectStore(DB_STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(DB_STORE_BOOKS)) {
+        const bookStore = db.createObjectStore(DB_STORE_BOOKS, { keyPath: 'id' });
+        bookStore.createIndex('synced', 'synced', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(DB_STORE_SETTINGS)) {
+        db.createObjectStore(DB_STORE_SETTINGS, { keyPath: 'key' });
+      }
+      const tx = e.target.transaction;
+      if (tx.objectStoreNames.contains(DB_STORE_BOOKS)) {
+        const bookStore = tx.objectStore(DB_STORE_BOOKS);
+        if (!bookStore.indexNames.contains('synced')) {
+          bookStore.createIndex('synced', 'synced', { unique: false });
+        }
       }
     };
     req.onsuccess = () => { db = req.result; resolve(db); };
@@ -31,8 +43,8 @@ function openDB() {
  */
 function saveBook(book) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readwrite');
-    tx.objectStore(DB_STORE).put(book);
+    const tx = db.transaction(DB_STORE_BOOKS, 'readwrite');
+    tx.objectStore(DB_STORE_BOOKS).put(book);
     tx.oncomplete = () => resolve();
     tx.onerror = e => reject(e);
   });
@@ -45,8 +57,8 @@ function saveBook(book) {
  */
 function getBook(id) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readonly');
-    const req = tx.objectStore(DB_STORE).get(id);
+    const tx = db.transaction(DB_STORE_BOOKS, 'readonly');
+    const req = tx.objectStore(DB_STORE_BOOKS).get(id);
     req.onsuccess = () => resolve(req.result);
     req.onerror = e => reject(e);
   });
@@ -59,8 +71,8 @@ function getBook(id) {
  */
 function getAllBooks() {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readonly');
-    const req = tx.objectStore(DB_STORE).getAll();
+    const tx = db.transaction(DB_STORE_BOOKS, 'readonly');
+    const req = tx.objectStore(DB_STORE_BOOKS).getAll();
     req.onsuccess = () => resolve(req.result);
     req.onerror = e => reject(e);
   });
@@ -73,9 +85,36 @@ function getAllBooks() {
  */
 function deleteBook(id) {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readwrite');
-    const req = tx.objectStore(DB_STORE).delete(id);
+    const tx = db.transaction(DB_STORE_BOOKS, 'readwrite');
+    const req = tx.objectStore(DB_STORE_BOOKS).delete(id);
     req.onsuccess = () => resolve();
+    req.onerror = e => reject(e);
+  });
+}
+
+/**
+ * 保存同步设置
+ * @param {Object} settings - 同步设置对象，包含syncUrl和syncToken
+ * @returns {Promise<void>} 操作完成的Promise
+ */
+function saveSyncSettings(settings) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE_SETTINGS, 'readwrite');
+    tx.objectStore(DB_STORE_SETTINGS).put({ key: 'syncSettings', value: settings });
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e);
+  });
+}
+
+/**
+ * 获取同步设置
+ * @returns {Promise<Object|null>} 返回同步设置对象，如果不存在则返回null
+ */
+function getSyncSettings() {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE_SETTINGS, 'readonly');
+    const req = tx.objectStore(DB_STORE_SETTINGS).get('syncSettings');
+    req.onsuccess = () => resolve(req.result ? req.result.value : null);
     req.onerror = e => reject(e);
   });
 }
