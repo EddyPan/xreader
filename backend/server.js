@@ -15,19 +15,29 @@ app.listen(HTTP_PORT, () => {
     console.log("Server running on port %PORT%".replace("%PORT%",HTTP_PORT))
 });
 
+const crypto = require('crypto');
+
 // Middleware for authentication
 const auth = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
-    // In a real application, you would validate the token against a database of valid tokens.
-    // For this example, we'll just check if a token is present.
-    if (!token) {
-        return res.status(401).json({ error: "Unauthorized" });
+    const secretKey = process.env.SECRET_KEY;
+    const md5Hash = process.env.MD5_HASH;
+
+    if (!token || !secretKey || !md5Hash) {
+        return res.status(401).json({ error: "Unauthorized: Missing token or server configuration" });
     }
-    next();
+
+    const hash = crypto.createHmac('md5', secretKey).update(token).digest('hex');
+
+    if (hash === md5Hash) {
+        next();
+    } else {
+        res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
 };
 
 // GET /health
-app.get("/health", (req, res, next) => {
+app.get("/health", auth, (req, res, next) => {
     res.json({status: "ok"});
 });
 
