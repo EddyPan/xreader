@@ -415,7 +415,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      const response = await fetch(`${syncUrl}/health`);
+      const response = await fetch(`${syncUrl}/health`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${syncToken}`,
+        }
+      });
       if (response.ok) {
         await saveSyncSettings({ syncUrl, syncToken });
         toggleSyncSettings(false);

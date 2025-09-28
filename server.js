@@ -1,12 +1,17 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
 const db = require("./database.js");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+// Serve static files from the root directory
+app.use(express.static(__dirname));
 
 const HTTP_PORT = 8000;
 
@@ -17,11 +22,20 @@ app.listen(HTTP_PORT, () => {
 
 const crypto = require('crypto');
 
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Middleware for authentication
+// Default token for development: dev-token
 const auth = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
     const secretKey = process.env.SECRET_KEY;
     const md5Hash = process.env.MD5_HASH;
+
+    console.log("Received token:", token);
+    console.log("Received secretKey:", secretKey);
+    console.log("Received md5Hash:", md5Hash);
 
     if (!token || !secretKey || !md5Hash) {
         return res.status(401).json({ error: "Unauthorized: Missing token or server configuration" });
@@ -29,6 +43,8 @@ const auth = (req, res, next) => {
 
     const hash = crypto.createHmac('md5', secretKey).update(token).digest('hex');
 
+    console.log("Calculated hash:", hash);
+    
     if (hash === md5Hash) {
         next();
     } else {
