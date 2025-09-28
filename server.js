@@ -11,7 +11,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static files from the root directory
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 const HTTP_PORT = process.env.PORT || 8000;
 
@@ -25,7 +25,7 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
 const crypto = require('crypto');
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Middleware for authentication
