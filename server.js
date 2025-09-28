@@ -13,12 +13,14 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 // Serve static files from the root directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-const HTTP_PORT = 8000;
+const HTTP_PORT = process.env.PORT || 8000;
 
-// Start server
-app.listen(HTTP_PORT, () => {
-    console.log("Server running on port %PORT%".replace("%PORT%",HTTP_PORT))
-});
+// 如果在本地环境运行，启动服务器
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(HTTP_PORT, () => {
+        console.log("Server running on port %PORT%".replace("%PORT%",HTTP_PORT))
+    });
+}
 
 const crypto = require('crypto');
 
@@ -119,3 +121,6 @@ app.get("/sync/:bookId", auth, (req, res, next) => {
 app.use(function(req, res){
     res.status(404);
 });
+
+// 导出app供Vercel使用
+module.exports = app;
