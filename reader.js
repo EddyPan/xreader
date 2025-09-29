@@ -230,6 +230,50 @@ function highlightSearchTerm(text, query) {
 
 // --- Media Session API Integration ---
 
+// --- Silent Audio Context for Media Session Workaround ---
+let audioCtx = null;
+let silentSource = null;
+
+function getSilentAudioContext() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.error('Web Audio API is not supported in this browser.');
+      return null;
+    }
+  }
+  return audioCtx;
+}
+
+function playSilence() {
+  const ctx = getSilentAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  if (silentSource) {
+    return;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = ctx.createBuffer(1, 1, 22050);
+  source.loop = true;
+  source.connect(ctx.destination);
+  source.start(0);
+  silentSource = source;
+}
+
+function stopSilence() {
+  if (silentSource) {
+    silentSource.stop(0);
+    silentSource.disconnect();
+    silentSource = null;
+  }
+}
+
 /**
  * Sets up the media session action handlers for system-level playback controls.
  * This should only be run once.
@@ -493,7 +537,7 @@ function speakNextParagraph() {
 
   const paras = currentBook.paras;
   if (currentParagraphIndex >= paras.length) {
-    document.getElementById('silentAudio').pause();
+    stopSilence();
     isSpeaking = false;
     setMediaPlaybackState('paused');
     // 朗读完成时保存最终进度
@@ -570,13 +614,12 @@ function updateSpeakButton() {
  * 如果在朗读，则停止；如果已停止，则开始朗读。
  */
 function startSpeaking() {
-  const silentAudio = document.getElementById('silentAudio');
   if (!currentBook) return;
 
   // 如果语音正在活动（包括朗读或暂停状态），则停止
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
-    silentAudio.pause();
+    stopSilence();
     isSpeaking = false;
     saveReadingProgress(); // 停止时保存进度
     updateSpeakButton();
@@ -605,7 +648,7 @@ function startSpeaking() {
   window.speechSynthesis.cancel();
    
   // 设置为朗读状态
-  silentAudio.play().catch(e => console.error('Silent audio playback failed', e));
+  playSilence();
   isSpeaking = true;
   updateSpeakButton();
   setMediaPlaybackState('playing');
@@ -687,12 +730,7 @@ function loadVoices(filter = '') {
  * @param {Object} book - 书籍对象，包含文本、段落等信息
  */
 async function openBook(book) {
-  // Ensure silent audio is paused when opening a new book
-  const silentAudio = document.getElementById('silentAudio');
-  if (silentAudio) {
-    silentAudio.pause();
-  }
-
+  stopSilence();
   // 清理之前的朗读状态
   window.speechSynthesis.cancel();
   isSpeaking = false;
