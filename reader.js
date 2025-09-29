@@ -228,6 +228,71 @@ function highlightSearchTerm(text, query) {
 
 // ---------------- 朗读功能 ----------------
 
+// --- Media Session API Integration ---
+
+/**
+ * Sets up the media session action handlers for system-level playback controls.
+ * This should only be run once.
+ */
+function setupMediaActionHandlers() {
+  if (!('mediaSession' in navigator)) {
+    return;
+  }
+
+  if (window.mediaHandlersSetup) {
+    return;
+  }
+
+  navigator.mediaSession.setActionHandler('play', () => {
+    if (!isSpeaking) {
+      startSpeaking();
+    }
+  });
+
+  navigator.mediaSession.setActionHandler('pause', () => {
+    if (isSpeaking) {
+      startSpeaking(); // Toggles to stop
+    }
+  });
+
+  navigator.mediaSession.setActionHandler('nexttrack', nextPage);
+  navigator.mediaSession.setActionHandler('previoustrack', prevPage);
+
+  // Disable unsupported actions
+  navigator.mediaSession.setActionHandler('seekbackward', null);
+  navigator.mediaSession.setActionHandler('seekforward', null);
+  navigator.mediaSession.setActionHandler('seekto', null);
+
+  window.mediaHandlersSetup = true;
+}
+
+/**
+ * Updates the media session metadata with the current book's information.
+ * @param {object} book - The current book object.
+ */
+function updateMediaSessionMetadata(book) {
+  if (!('mediaSession' in navigator)) {
+    return;
+  }
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: book.name,
+    artist: 'E-Book Reader',
+    album: ' ', // Use a space to avoid showing "Unknown Album"
+  });
+}
+
+/**
+ * Updates the playback state for the media session.
+ * @param {'none' | 'paused' | 'playing'} state 
+ */
+function setMediaPlaybackState(state) {
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.playbackState = state;
+  }
+}
+
+
 let syncTimeout;
 
 /**
@@ -429,6 +494,7 @@ function speakNextParagraph() {
   const paras = currentBook.paras;
   if (currentParagraphIndex >= paras.length) {
     isSpeaking = false;
+    setMediaPlaybackState('paused');
     // 朗读完成时保存最终进度
     saveReadingProgress();
     // 清除高亮
@@ -511,6 +577,7 @@ function startSpeaking() {
     isSpeaking = false;
     saveReadingProgress(); // 停止时保存进度
     updateSpeakButton();
+    setMediaPlaybackState('paused');
     return;
   }
 
@@ -537,6 +604,7 @@ function startSpeaking() {
   // 设置为朗读状态
   isSpeaking = true;
   updateSpeakButton();
+  setMediaPlaybackState('playing');
    
   // 延迟以确保语音系统准备就绪
   setTimeout(() => {
@@ -652,6 +720,11 @@ async function openBook(book) {
 
   // 渲染页面
   renderPage();
+
+  // 设置媒体会话，用于系统级播放控制
+  updateMediaSessionMetadata(book);
+  setupMediaActionHandlers();
+  setMediaPlaybackState('paused');
   
   // 延迟高亮上次阅读位置，确保页面渲染完成
   if (targetParaIndex >= 0 && targetParaIndex < book.paras.length) {
