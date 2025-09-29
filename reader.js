@@ -580,13 +580,11 @@ function startSpeaking() {
   isSpeaking = true;
   updateSpeakButton();
   setMediaPlaybackState('playing');
-   
-  // 延迟以确保语音系统准备就绪
-  setTimeout(() => {
-    if (isSpeaking) {
-      speakNextParagraph();
-    }
-  }, 100);
+
+  // Directly call speakNextParagraph without delay
+  if (isSpeaking) {
+    speakNextParagraph();
+  }
 }
 
 /**
