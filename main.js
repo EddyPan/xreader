@@ -87,6 +87,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 初始化语音
+  let initialVoiceFilter = localStorage.getItem('voiceFilterValue') || 'chinese';
+  document.getElementById('voiceFilter').value = initialVoiceFilter;
+
   /**
    * 初始化语音合成音色
    * 根据当前过滤条件加载可用音色列表
@@ -156,6 +159,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(voiceFilterTimeout);
     voiceFilterTimeout = setTimeout(() => {
       loadVoices(e.target.value);
+      localStorage.setItem('voiceFilterValue', e.target.value);
     }, 300); // 300ms防抖延迟
   });
 

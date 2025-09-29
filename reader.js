@@ -686,7 +686,14 @@ function loadVoices(filter = '') {
     voiceSelect.selectedIndex = selectedIndex;
     selectedVoice = filtered[selectedIndex];
   } else if (filtered.length > 0) {
-    selectedVoice = filtered[0];
+    // 尝试查找中文音色作为默认值
+    const chineseVoice = filtered.find(v => v.lang.toLowerCase().includes('zh'));
+    if (chineseVoice) {
+      selectedVoice = chineseVoice;
+      voiceSelect.selectedIndex = filtered.indexOf(chineseVoice);
+    } else {
+      selectedVoice = filtered[0];
+    }
     // 保存默认选择
     localStorage.setItem('selectedVoiceName', selectedVoice.name);
   }
