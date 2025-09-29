@@ -46,7 +46,7 @@ header h1 {
 .file-pill {
   display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 2px 12px;
   border-radius: 16px;
   cursor: pointer;
   font-size: 0.9rem;
@@ -56,7 +56,7 @@ header h1 {
   background: transparent;
   border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 8px 12px;
+  padding: 2px 12px;
   cursor: pointer;
   font-size: 0.9rem;
   display: inline-flex;
@@ -74,7 +74,7 @@ button {
   background: #eee;
   border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 8px 12px;
+  padding: 2px 12px;
   cursor: pointer;
   font-size: 0.9rem;
 }
