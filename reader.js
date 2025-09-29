@@ -124,29 +124,15 @@ function renderPage() {
     // 添加点击事件，允许用户从指定段落开始朗读
     p.addEventListener('click', () => {
       if (currentBook) {
-        // 停止当前朗读
+        // 停止当前朗读，以便从新位置开始
         window.speechSynthesis.cancel();
         isSpeaking = false;
-        
+
         // 设置新的朗读起始位置
         currentParagraphIndex = i;
         
-        // 如果点击的是当前页的其他段落，直接开始朗读
-        if (Math.floor(i / pageSize) === currentPage) {
-          isSpeaking = true;  // 设置朗读状态为true
-          updateSpeakButton();
-          speakNextParagraph();
-        } else {
-          // 如果点击的是其他页的段落，先切换到对应页面
-          currentPage = Math.floor(i / pageSize);
-          renderPage();
-          // 页面切换完成后开始朗读
-          setTimeout(() => {
-            isSpeaking = true;  // 设置朗读状态为true
-            updateSpeakButton();
-            speakNextParagraph();
-          }, 100);
-        }
+        // 调用通用的朗读函数，由它来处理所有状态
+        startSpeaking();
       }
     });
     viewport.appendChild(p);
