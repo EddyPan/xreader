@@ -97,6 +97,30 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.speechSynthesis.onvoiceschanged = initVoices;
   initVoices();
 
+  // 初始化语速选择
+  function initRateOptions() {
+    const rateSelect = document.getElementById('rate');
+    const savedRate = localStorage.getItem('selectedRate');
+
+    for (let i = 8; i <= 20; i++) {
+      const option = document.createElement('option');
+      const value = i / 10;
+      option.value = value;
+      option.textContent = `${value.toFixed(1)}x`;
+      if (savedRate && parseFloat(savedRate) === value) {
+        option.selected = true;
+      } else if (!savedRate && value === 1.0) {
+        option.selected = true;
+      }
+      rateSelect.appendChild(option);
+    }
+
+    rateSelect.addEventListener('change', (e) => {
+      localStorage.setItem('selectedRate', e.target.value);
+    });
+  }
+  initRateOptions();
+
   document.getElementById('voiceSelect').addEventListener('change', e => {
     const idx = parseInt(e.target.value, 10);
     const f = document.getElementById('voiceFilter').value.toLowerCase();
