@@ -123,7 +123,8 @@ function renderPage() {
     p.dataset.index = i;
     // 添加点击事件，允许用户从指定段落开始朗读
     p.addEventListener('click', () => {
-      if (currentBook) {
+      // 仅在朗读状态下，点击段落才重新开始朗读
+      if (currentBook && isSpeaking) {
         // 停止当前朗读，以便从新位置开始
         window.speechSynthesis.cancel();
         isSpeaking = false;
@@ -498,72 +499,51 @@ function updateSpeakButton() {
 }
 
 /**
- * 开始或暂停朗读功能
- * 处理三种状态：开始朗读、暂停朗读、恢复朗读
- * 从当前阅读进度或保存的段落位置开始朗读
+ * 开始或停止朗读功能
+ * 如果在朗读，则停止；如果已停止，则开始朗读。
  */
 function startSpeaking() {
   if (!currentBook) return;
-  
+
+  // 如果语音正在活动（包括朗读或暂停状态），则停止
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+    saveReadingProgress(); // 停止时保存进度
+    updateSpeakButton();
+    return;
+  }
+
+  // --- 以下是开始新朗读的逻辑 ---
+
   // 检查语音合成系统是否就绪
   if (!isSpeechSynthesisReady()) {
     console.warn('语音合成系统未就绪，尝试重新加载音色...');
-    loadVoices();
+    loadVoices(); // 尝试加载音色
+    // 短暂延迟后重试
     setTimeout(() => {
-      if (isSpeechSynthesisReady() && isSpeaking) {
-        speakNextParagraph();
+      if (isSpeechSynthesisReady()) {
+        startSpeaking(); // 再次尝试开始
+      } else {
+        alert('语音功能加载失败，请刷新页面或更换浏览器重试。');
       }
     }, 500);
     return;
   }
    
-  // 如果正在朗读，暂停
-  if (isSpeaking) {
-    window.speechSynthesis.pause();
-    isSpeaking = false;
-    updateSpeakButton();
-    return;
-  }
-   
-  // 如果已暂停，恢复朗读
-  if (window.speechSynthesis.paused && window.speechSynthesis.speaking) {
-    window.speechSynthesis.resume();
-    isSpeaking = true;
-    updateSpeakButton();
-    return;
-  }
-   
-  // 停止任何正在进行的朗读，确保状态干净
+  // 确保开始前状态干净
   window.speechSynthesis.cancel();
    
-  // 开始新的朗读
+  // 设置为朗读状态
   isSpeaking = true;
   updateSpeakButton();
    
-  // 延迟一小段时间确保语音合成系统准备好
+  // 延迟以确保语音系统准备就绪
   setTimeout(() => {
     if (isSpeaking) {
       speakNextParagraph();
     }
   }, 100);
-}
-
-/**
- * 停止朗读功能
- * 完全取消当前的语音合成，保存当前断点位置
- * 停止朗读时保留当前段落位置，便于下次继续
- */
-function stopSpeaking() {
-  if (!currentBook) return;
-  
-  // 完全停止语音合成并清理状态
-  window.speechSynthesis.cancel();
-  isSpeaking = false;
-  
-  // 保存当前断点位置，不重置到页面开始
-  saveReadingProgress();
-  
-  updateSpeakButton();
 }
 
 /**

@@ -193,7 +193,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // 朗读
   document.getElementById('btnSpeak').onclick = startSpeaking;
-  document.getElementById('btnStop').onclick = stopSpeaking;
+
 
   // 全屏
   document.getElementById('btnFullscreen').onclick = toggleFullscreen;
@@ -204,7 +204,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'ArrowLeft') prevPage();
     else if (e.key === 'ArrowRight') nextPage();
     else if (e.key === ' ') { e.preventDefault(); startSpeaking(); }
-    else if (e.key.toLowerCase() === 's') stopSpeaking();
+
     else if (e.key === 'Escape') {
       // ESC键关闭阅读列表
       const container = document.getElementById('bookListContainer');
@@ -473,4 +473,36 @@ window.addEventListener('DOMContentLoaded', async () => {
       alert('健康检查请求失败，请检查网络连接和接口地址');
     }
   });
+
+  // --- Theme Switching ---
+  function applyTheme(theme) {
+    const themeBtn = document.getElementById('btnToggleTheme');
+    if (theme === 'dark') {
+      document.body.classList.add('dark-mode');
+      themeBtn.textContent = '日间模式';
+    } else {
+      document.body.classList.remove('dark-mode');
+      themeBtn.textContent = '夜间模式';
+    }
+  }
+
+  function toggleTheme() {
+    const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+    try {
+      localStorage.setItem('theme', newTheme);
+    } catch (e) {
+      console.warn('Could not access localStorage for saving theme:', e);
+    }
+    applyTheme(newTheme);
+  }
+
+  let savedTheme = 'light';
+  try {
+    savedTheme = localStorage.getItem('theme') || 'light';
+  } catch (e) {
+    console.warn('Could not access localStorage for reading theme:', e);
+  }
+  applyTheme(savedTheme);
+
+  document.getElementById('btnToggleTheme').addEventListener('click', toggleTheme);
 });
