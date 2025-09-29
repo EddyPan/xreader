@@ -139,6 +139,9 @@ function renderPage() {
     viewport.appendChild(p);
   }
 
+  // 翻页后，重置滚动条到顶部
+  viewport.scrollTop = 0;
+
   // 更新页码显示，确保总页数计算准确
   const totalPages = Math.ceil(paras.length / pageSize);
   document.getElementById('pageLabel').textContent =
@@ -170,26 +173,46 @@ function renderPage() {
  * 检查是否到达最后一页，如果未到达则增加页码并重新渲染
  * 朗读时自动跟随到下一页
  */
+function animatePageTurn(direction) {
+    const viewport = document.getElementById('viewport');
+    const animationDuration = 150; // Must match CSS animation time in ms
+
+    if (viewport.dataset.animating === 'true') return;
+    viewport.dataset.animating = 'true';
+
+    viewport.classList.add('animating-out');
+
+    setTimeout(() => {
+        if (direction === 'next') {
+            currentPage++;
+        } else {
+            currentPage--;
+        }
+        renderPage(); // Update content while invisible
+
+        viewport.classList.remove('animating-out');
+        viewport.classList.add('animating-in');
+
+        setTimeout(() => {
+            viewport.classList.remove('animating-in');
+            viewport.dataset.animating = 'false';
+        }, animationDuration);
+
+    }, animationDuration);
+}
+
 function nextPage() {
   if (!currentBook) return;
   const maxPage = Math.ceil(currentBook.paras.length / pageSize) - 1;
   if (currentPage < maxPage) {
-    currentPage++;
-    renderPage();
+    animatePageTurn('next');
   }
 }
 
-/**
- * 翻到上一页
- * 检查是否到达第一页，如果未到达则减少页码并重新渲染
- * 朗读状态下自动跟随到上一页
- */
 function prevPage() {
   if (!currentBook) return;
   if (currentPage > 0) {
-    currentPage--;
-    renderPage();
-
+    animatePageTurn('prev');
   }
 }
 
@@ -427,8 +450,9 @@ function isSpeechSynthesisReady() {
  * @param {number} index - 要高亮显示的段落索引
  */
 function highlightCurrentParagraph(index) {
-  // 移除之前的高亮
   const viewport = document.getElementById('viewport');
+  
+  // 移除之前的高亮
   const prevHighlighted = viewport.querySelector('.speaking-paragraph');
   if (prevHighlighted) {
     prevHighlighted.classList.remove('speaking-paragraph');
@@ -445,8 +469,22 @@ function highlightCurrentParagraph(index) {
   const currentParagraph = viewport.querySelector(`[data-index="${index}"]`);
   if (currentParagraph) {
     currentParagraph.classList.add('speaking-paragraph');
-    // 确保当前段落可见
-    currentParagraph.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const pRect = currentParagraph.getBoundingClientRect();
+
+    // 如果段落不在视口可见区域内，则滚动
+    if (pRect.top < viewportRect.top || pRect.bottom > viewportRect.bottom) {
+        // 计算滚动量，将段落居中
+        const desiredPTop = (viewportRect.height / 2) - (pRect.height / 2);
+        const currentPTop = pRect.top - viewportRect.top;
+        const scrollAmount = currentPTop - desiredPTop;
+
+        viewport.scrollBy({
+            top: scrollAmount,
+            behavior: 'smooth'
+        });
+    }
   }
 }
 

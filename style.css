@@ -160,7 +160,7 @@ button:hover {
   width: 100px;
   padding: 4px;
   border-radius: 4px;
-  border: 1px solid #ccc;
+  border: 1px solid #555;
 }
 
 .viewport {
@@ -170,6 +170,7 @@ button:hover {
   line-height: 2;
   font-size: 1.1rem;
   outline: none; /* for tabindex */
+  opacity: 1; /* for animation */
 }
 
 .viewport p {
@@ -364,6 +365,7 @@ button:hover {
     height: calc(100vh - 200px); /* Adjust for mobile header/footer */
     padding: 1rem;
     font-size: 1rem;
+    padding-bottom: 60px; /* Add space for the fixed pager */
   }
 
   .speech-controls {
@@ -386,24 +388,25 @@ button:hover {
 /* --- Night Mode --- */
 body.dark-mode {
   background-color: #1a1a1a;
-  color: #e0e0e0;
+  color: #5f6b7c;
 }
 
 .dark-mode .app,
 .dark-mode header,
 .dark-mode .reader-wrap,
+.dark-mode .reader-header,
 .dark-mode .book-list-container,
 .dark-mode .search-container,
 .dark-mode .sync-settings-container,
 .dark-mode .pager {
   background: #242424;
-  color: #e0e0e0;
+  color: #5f6b7c;
   border-color: #444;
 }
 
 .dark-mode .ghost,
 .dark-mode .ghost:hover {
-  color: #e0e0e0;
+  color: #5f6b7c;
   border-color: #555;
   background-color: transparent;
 }
@@ -411,7 +414,7 @@ body.dark-mode {
 .dark-mode button,
 .dark-mode .file-pill {
   background: #333;
-  color: #e0e0e0;
+  color: #5f6b7c;
   border-color: #555;
 }
 
@@ -434,7 +437,7 @@ body.dark-mode {
 .dark-mode select,
 .dark-mode .audio-select {
   background-color: #333;
-  color: #e0e0e0;
+  color: #5f6b7c;
   border-color: #555;
 }
 
@@ -450,4 +453,23 @@ body.dark-mode {
 .dark-mode .dropzone.dragover {
   background-color: #333;
   border-color: #777;
+}
+
+/* --- Page Turn Animation --- */
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.viewport.animating-out {
+  animation: fade-out 0.15s ease-in forwards;
+}
+
+.viewport.animating-in {
+  animation: fade-in 0.15s ease-out forwards;
 }
