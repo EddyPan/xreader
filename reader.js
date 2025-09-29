@@ -592,6 +592,12 @@ function startSpeaking() {
 
   // --- 以下是开始新朗读的逻辑 ---
 
+  // 朗读时，将阅读器标题滚动到视野内，最大化阅读区域
+  const readerHeader = document.querySelector('.reader-header');
+  if (readerHeader) {
+    readerHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // 检查语音合成系统是否就绪
   if (!isSpeechSynthesisReady()) {
     console.warn('语音合成系统未就绪，尝试重新加载音色...');
