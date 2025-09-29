@@ -493,6 +493,7 @@ function speakNextParagraph() {
 
   const paras = currentBook.paras;
   if (currentParagraphIndex >= paras.length) {
+    document.getElementById('silentAudio').pause();
     isSpeaking = false;
     setMediaPlaybackState('paused');
     // 朗读完成时保存最终进度
@@ -569,11 +570,13 @@ function updateSpeakButton() {
  * 如果在朗读，则停止；如果已停止，则开始朗读。
  */
 function startSpeaking() {
+  const silentAudio = document.getElementById('silentAudio');
   if (!currentBook) return;
 
   // 如果语音正在活动（包括朗读或暂停状态），则停止
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
+    silentAudio.pause();
     isSpeaking = false;
     saveReadingProgress(); // 停止时保存进度
     updateSpeakButton();
@@ -602,6 +605,7 @@ function startSpeaking() {
   window.speechSynthesis.cancel();
    
   // 设置为朗读状态
+  silentAudio.play().catch(e => console.error('Silent audio playback failed', e));
   isSpeaking = true;
   updateSpeakButton();
   setMediaPlaybackState('playing');
@@ -683,6 +687,12 @@ function loadVoices(filter = '') {
  * @param {Object} book - 书籍对象，包含文本、段落等信息
  */
 async function openBook(book) {
+  // Ensure silent audio is paused when opening a new book
+  const silentAudio = document.getElementById('silentAudio');
+  if (silentAudio) {
+    silentAudio.pause();
+  }
+
   // 清理之前的朗读状态
   window.speechSynthesis.cancel();
   isSpeaking = false;
