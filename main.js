@@ -100,23 +100,35 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 初始化语速选择
   function initRateOptions() {
     const rateSelect = document.getElementById('rate');
-    const savedRate = localStorage.getItem('selectedRate');
+    let targetRate = 1.0; // Default rate
+
+    try {
+      const savedRate = localStorage.getItem('selectedRate');
+      if (savedRate && !isNaN(parseFloat(savedRate))) {
+        targetRate = parseFloat(savedRate);
+      }
+    } catch (e) {
+      console.warn('Could not access localStorage for reading rate:', e);
+    }
 
     for (let i = 8; i <= 20; i++) {
       const option = document.createElement('option');
       const value = i / 10;
       option.value = value;
       option.textContent = `${value.toFixed(1)}x`;
-      if (savedRate && parseFloat(savedRate) === value) {
-        option.selected = true;
-      } else if (!savedRate && value === 1.0) {
+      // Use Math.abs to handle floating point inaccuracies
+      if (Math.abs(value - targetRate) < 0.01) {
         option.selected = true;
       }
       rateSelect.appendChild(option);
     }
 
     rateSelect.addEventListener('change', (e) => {
-      localStorage.setItem('selectedRate', e.target.value);
+      try {
+        localStorage.setItem('selectedRate', e.target.value);
+      } catch (e) {
+        console.warn('Could not access localStorage for saving rate:', e);
+      }
     });
   }
   initRateOptions();
