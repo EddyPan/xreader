@@ -639,7 +639,7 @@ function toggleFullscreen() {
   const reader = document.getElementById('reader');
   if (reader.classList.contains('fullscreen')) {
     reader.classList.remove('fullscreen');
-    document.body.style.overflow = 'hidden';
+    document.body.style.removeProperty("overflow");
   } else {
     reader.classList.add('fullscreen');
     document.body.style.overflow = 'visible';
