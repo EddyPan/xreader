@@ -258,38 +258,6 @@ function highlightSearchTerm(text, query) {
 
 // ---------------- 朗读功能 ----------------
 
-// --- Media Session API Integration ---
-function setupMediaActionHandlers() {
-  if (!('mediaSession' in navigator)) {
-    return;
-  }
-  if (window.mediaHandlersSetup) {
-    return;
-  }
-  navigator.mediaSession.setActionHandler('play', startSpeaking);
-  navigator.mediaSession.setActionHandler('pause', startSpeaking); // It's a toggle
-  navigator.mediaSession.setActionHandler('nexttrack', nextPage);
-  navigator.mediaSession.setActionHandler('previoustrack', prevPage);
-  window.mediaHandlersSetup = true;
-}
-
-function updateMediaSessionMetadata(book) {
-  if (!('mediaSession' in navigator)) {
-    return;
-  }
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title: book.name,
-    artist: 'E-Book Reader',
-    album: ' ',
-  });
-}
-
-function setMediaPlaybackState(state) {
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.playbackState = state;
-  }
-}
-
 
 let syncTimeout;
 
@@ -506,9 +474,7 @@ function speakNextParagraph() {
 
   const paras = currentBook.paras;
   if (currentParagraphIndex >= paras.length) {
-    document.getElementById('silentAudio').pause();
     isSpeaking = false;
-    setMediaPlaybackState('paused');
     // 朗读完成时保存最终进度
     saveReadingProgress();
     // 清除高亮
@@ -583,17 +549,14 @@ function updateSpeakButton() {
  * 如果在朗读，则停止；如果已停止，则开始朗读。
  */
 function startSpeaking() {
-  const silentAudio = document.getElementById('silentAudio');
   if (!currentBook) return;
 
   // 如果语音正在活动（包括朗读或暂停状态），则停止
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
-    silentAudio.pause();
     isSpeaking = false;
     saveReadingProgress(); // 停止时保存进度
     updateSpeakButton();
-    setMediaPlaybackState('paused');
     return;
   }
 
@@ -624,13 +587,8 @@ function startSpeaking() {
   window.speechSynthesis.cancel();
    
   // 设置为朗读状态
-  const playPromise = silentAudio.play();
-  if (playPromise !== undefined) {
-    playPromise.catch(e => console.error("Silent audio playback failed", e));
-  }
   isSpeaking = true;
   updateSpeakButton();
-  setMediaPlaybackState('playing');
 
   // Directly call speakNextParagraph without delay
   if (isSpeaking) {
@@ -707,6 +665,21 @@ function loadVoices(filter = '') {
 }
 
 // ---------------- 打开/加载书 ----------------
+
+/**
+ * 从书名中移除文件扩展名
+ * @param {Object} book - 书籍对象
+ * @returns {string} - 清理后的书名
+ */
+function getCleanBookName(book) {
+    if (!book || !book.name) return "";
+    const lastDotIndex = book.name.lastIndexOf('.');
+    if (lastDotIndex > 0) { // 大于0以避免处理像.bashrc这样的隐藏文件
+        return book.name.substring(0, lastDotIndex);
+    }
+    return book.name;
+}
+
 /**
  * 打开并显示指定书籍
  * 设置当前书籍和页码，更新UI显示，隐藏文件选择区域
@@ -714,7 +687,6 @@ function loadVoices(filter = '') {
  * @param {Object} book - 书籍对象，包含文本、段落等信息
  */
 async function openBook(book) {
-  document.getElementById('silentAudio').pause();
   // 清理之前的朗读状态
   window.speechSynthesis.cancel();
   isSpeaking = false;
@@ -741,8 +713,9 @@ async function openBook(book) {
     targetParaIndex = book.progress?.paraIndex || 0;
   }
 
-  document.title = book.name + ' - 小说阅读器';
-  document.getElementById('bookTitle').textContent = book.name;
+  const cleanBookName = getCleanBookName(book);
+  document.title = cleanBookName + ' - 小说阅读器';
+  document.getElementById('bookTitle').textContent = cleanBookName;
   document.getElementById('reader').classList.remove('hidden');
   document.getElementById('dropzone').classList.add('hidden');
   document.getElementById('btnToggleSearch').style.display = 'inline-flex';
@@ -754,9 +727,6 @@ async function openBook(book) {
   renderPage();
 
   // 设置媒体会话，用于系统级播放控制
-  updateMediaSessionMetadata(book);
-  setupMediaActionHandlers();
-  setMediaPlaybackState('paused');
   
   // 延迟高亮上次阅读位置，确保页面渲染完成
   if (targetParaIndex >= 0 && targetParaIndex < book.paras.length) {
