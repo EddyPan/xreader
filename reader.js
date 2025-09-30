@@ -122,7 +122,8 @@ function renderPage(shouldSaveProgress = true) {
     p.textContent = paras[i];
     p.dataset.index = i;
     // 添加点击事件，允许用户从指定段落开始朗读
-    p.addEventListener('click', () => {
+    p.addEventListener('click', (e) => {
+      e.stopPropagation(); // 阻止事件冒泡，防止触发viewport的翻页事件
       if (currentBook && isSpeaking) {
         // 停止当前朗读，以便从新位置开始
         window.speechSynthesis.cancel();
