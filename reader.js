@@ -107,7 +107,7 @@ function calcPageSize() {
  * 更新页码标签、进度条和保存阅读进度
  * 如果在朗读中，保持当前段落的亮显状态
  */
-function renderPage() {
+function renderPage(shouldSaveProgress = true) {
   if (!currentBook) return;
   
   const viewport = document.getElementById('viewport');
@@ -123,7 +123,6 @@ function renderPage() {
     p.dataset.index = i;
     // 添加点击事件，允许用户从指定段落开始朗读
     p.addEventListener('click', () => {
-      // 仅在朗读状态下，点击段落才重新开始朗读
       if (currentBook && isSpeaking) {
         // 停止当前朗读，以便从新位置开始
         window.speechSynthesis.cancel();
@@ -134,6 +133,11 @@ function renderPage() {
         
         // 调用通用的朗读函数，由它来处理所有状态
         startSpeaking();
+      } else if (currentBook) {
+        // 非朗读状态下，点击段落则更新阅读进度
+        currentParagraphIndex = i;
+        highlightCurrentParagraph(currentParagraphIndex);
+        saveReadingProgress();
       }
     });
     viewport.appendChild(p);
@@ -150,17 +154,19 @@ function renderPage() {
   const progress = Math.floor((end / paras.length) * 100);
   document.getElementById('bookProgress').textContent = `进度：${progress}%`;
 
-  // 只有在没有段落进度或当前页不包含保存的段落时，才重置到页面开始
-  if (!currentBook.progress || 
-      currentBook.progress.page !== currentPage ||
-      currentBook.progress.paraIndex < start ||
-      currentBook.progress.paraIndex >= end) {
-    currentBook.progress = { page: currentPage, paraIndex: start };
+  if (shouldSaveProgress) {
+    // 只有在没有段落进度或当前页不包含保存的段落时，才重置到页面开始
+    if (!currentBook.progress || 
+        currentBook.progress.page !== currentPage ||
+        currentBook.progress.paraIndex < start ||
+        currentBook.progress.paraIndex >= end) {
+      currentBook.progress = { page: currentPage, paraIndex: start };
+    }
+    
+    saveBook(currentBook).then(() => {
+      localStorage.setItem(META_KEY, JSON.stringify({ lastBookId: currentBook.id }));
+    });
   }
-  
-  saveBook(currentBook).then(() => {
-    localStorage.setItem(META_KEY, JSON.stringify({ lastBookId: currentBook.id }));
-  });
   
   // 如果在朗读中，重新高亮当前段落
   if (isSpeaking && currentParagraphIndex >= start && currentParagraphIndex < end) {
@@ -173,7 +179,7 @@ function renderPage() {
  * 检查是否到达最后一页，如果未到达则增加页码并重新渲染
  * 朗读时自动跟随到下一页
  */
-function animatePageTurn(direction) {
+function animatePageTurn(direction, shouldSaveProgress = true) {
     const viewport = document.getElementById('viewport');
     const animationDuration = 150; // Must match CSS animation time in ms
 
@@ -188,7 +194,7 @@ function animatePageTurn(direction) {
         } else {
             currentPage--;
         }
-        renderPage(); // Update content while invisible
+        renderPage(shouldSaveProgress); // Update content while invisible
 
         viewport.classList.remove('animating-out');
         viewport.classList.add('animating-in');
@@ -205,14 +211,14 @@ function nextPage() {
   if (!currentBook) return;
   const maxPage = Math.ceil(currentBook.paras.length / pageSize) - 1;
   if (currentPage < maxPage) {
-    animatePageTurn('next');
+    animatePageTurn('next', !isSpeaking);
   }
 }
 
 function prevPage() {
   if (!currentBook) return;
   if (currentPage > 0) {
-    animatePageTurn('prev');
+    animatePageTurn('prev', !isSpeaking);
   }
 }
 
