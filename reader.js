@@ -67,27 +67,6 @@ function splitTextToParas(text) {
   return paragraphs.filter(paragraph => paragraph.length > 0);
 }
 
-/**
- * 测试段落划分功能
- * 用于验证优化后的段落划分逻辑
- * @param {string} testText - 测试文本
- * @returns {void}
- */
-function testParagraphSplitting(testText) {
-  console.log('=== 段落划分测试 ===');
-  console.log('原始文本:');
-  console.log(testText);
-  console.log('\n划分结果:');
-  
-  const paragraphs = splitTextToParas(testText);
-  
-  paragraphs.forEach((paragraph, index) => {
-    console.log(`段落 ${index + 1} (${paragraph.length} 字符): "${paragraph}"`);
-  });
-  
-  console.log(`\n总共划分出 ${paragraphs.length} 个段落`);
-  console.log('==================');
-}
 
 /**
  * 固定每页显示15行，不再根据窗口大小动态调整
