@@ -77,7 +77,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   await refreshBookList();
 
   // 如果有上次阅读的书，自动打开
-  const meta = localStorage.getItem('NovelReaderMeta');
+  const meta = localStorage.getItem(META_KEY);
   if (meta) {
     const { lastBookId } = JSON.parse(meta);
     if (lastBookId) {
@@ -302,6 +302,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // 点击翻页区域（手机端大屏幕优化）
   viewport.addEventListener('click', e => {
     if (window.innerWidth > 768) return; // 只在手机端生效
+    if (e.target.closest('p[data-index]')) return; // 点击段落交给 reader.js 委托的段落选择处理
     
     const rect = viewport.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -379,7 +380,16 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    results.forEach(result => {
+    // 结果过多时截断，避免一次性创建大量 DOM 节点
+    const MAX_RESULTS = 100;
+    if (results.length > MAX_RESULTS) {
+      const notice = document.createElement('div');
+      notice.className = 'list-item';
+      notice.textContent = `共 ${results.length} 条结果，仅显示前 ${MAX_RESULTS} 条`;
+      resultsEl.appendChild(notice);
+    }
+
+    results.slice(0, MAX_RESULTS).forEach(result => {
       const div = document.createElement('div');
       div.className = 'search-result-item';
       div.innerHTML = highlightSearchTerm(result.text, query);

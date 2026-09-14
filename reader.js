@@ -1,6 +1,5 @@
 /* 小说阅读器核心逻辑（翻页、朗读、进度管理） */
 
-let books = {};           // 所有书
 let currentBook = null;   // 当前书
 let currentPage = 0;      // 当前页码
 let pageSize = 20;        // 每页段落数
@@ -35,18 +34,6 @@ function splitTextToParas(text) {
 
 
 /**
- * 固定每页显示15行，不再根据窗口大小动态调整
- * 确保分页数量稳定，避免刷新后变化
- */
-function calcPageSize() {
-  
-  // 如果当前页码超出范围，调整到最后一页
-  if (currentBook && currentPage >= Math.ceil(currentBook.paras.length / pageSize)) {
-    currentPage = Math.max(0, Math.ceil(currentBook.paras.length / pageSize) - 1);
-  }
-}
-
-/**
  * 渲染当前页面内容
  * 根据当前页码和页面大小显示对应段落
  * 更新页码标签、进度条和保存阅读进度
@@ -62,31 +49,15 @@ function renderPage(shouldSaveProgress = true) {
   const start = currentPage * pageSize;
   const end = Math.min(paras.length, start + pageSize);
 
+  // 用 DocumentFragment 批量插入，减少回流；段落点击由 viewport 统一委托
+  const frag = document.createDocumentFragment();
   for (let i = start; i < end; i++) {
     const p = document.createElement('p');
     p.textContent = paras[i];
     p.dataset.index = i;
-    // 添加点击事件，允许用户从指定段落开始朗读
-    p.addEventListener('click', (e) => {
-      e.stopPropagation(); // 阻止事件冒泡，防止触发viewport的翻页事件
-      if (currentBook && isSpeaking) {
-        // 停止当前朗读，以便从新位置开始
-        stopSpeaking();
-
-        // 设置新的朗读起始位置
-        currentParagraphIndex = i;
-
-        // 调用通用的朗读函数，由它来处理所有状态
-        startSpeaking();
-      } else if (currentBook) {
-        // 非朗读状态下，点击段落则更新阅读进度
-        currentParagraphIndex = i;
-        highlightCurrentParagraph(currentParagraphIndex);
-        saveReadingProgress();
-      }
-    });
-    viewport.appendChild(p);
+    frag.appendChild(p);
   }
+  viewport.appendChild(frag);
 
   // 翻页后，重置滚动条到顶部
   viewport.scrollTop = 0;
@@ -100,7 +71,7 @@ function renderPage(shouldSaveProgress = true) {
   }
   document.getElementById('pageTotal').textContent = totalPages;
 
-  const progress = Math.floor((end / paras.length) * 100);
+  const progress = paras.length === 0 ? 0 : Math.floor((end / paras.length) * 100);
   document.getElementById('bookProgress').textContent = `进度：${progress}%`;
 
   if (shouldSaveProgress) {
@@ -112,8 +83,10 @@ function renderPage(shouldSaveProgress = true) {
       currentBook.progress = { page: currentPage, paraIndex: start };
     }
     
-    saveBook(currentBook).then(() => {
+    saveProgress(currentBook.id, currentBook.progress).then(() => {
       localStorage.setItem(META_KEY, JSON.stringify({ lastBookId: currentBook.id }));
+    }).catch(err => {
+      console.warn('保存阅读进度失败:', err);
     });
   }
   
@@ -122,6 +95,29 @@ function renderPage(shouldSaveProgress = true) {
     highlightCurrentParagraph(currentParagraphIndex);
   }
 }
+
+/**
+ * 段落点击统一委托到 viewport，避免每次渲染重复绑定监听器
+ * 朗读中点击段落则从该段落重新朗读；非朗读状态点击则更新阅读进度
+ * 注意：脚本位于 body 末尾，此处 DOM 已就绪；移动端翻页点击会跳过段落（见 main.js）
+ */
+document.getElementById('viewport').addEventListener('click', (e) => {
+  const p = e.target.closest('p[data-index]');
+  if (!p || !currentBook) return;
+  const index = parseInt(p.dataset.index, 10);
+
+  if (isSpeaking) {
+    // 停止当前朗读，以便从新位置开始
+    stopSpeaking();
+    currentParagraphIndex = index;
+    startSpeaking();
+  } else {
+    // 非朗读状态下，点击段落则更新阅读进度
+    currentParagraphIndex = index;
+    highlightCurrentParagraph(index);
+    saveReadingProgress();
+  }
+});
 
 /**
  * 翻到下一页
@@ -193,15 +189,37 @@ function searchInBook(query) {
 }
 
 /**
+ * 转义正则表达式中的特殊字符
+ * @param {string} s - 原始字符串
+ * @returns {string} 转义后的字符串
+ */
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 转义 HTML 特殊字符，防止内容被当作 HTML 解析
+ * @param {string} s - 原始字符串
+ * @returns {string} 转义后的字符串
+ */
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+/**
  * 高亮显示搜索结果中的关键词
+ * 文本与关键词均先转义，避免 XSS 与正则注入
  * @param {string} text - 原始文本
  * @param {string} query - 搜索关键词
  * @returns {string} - 包含高亮标签的HTML字符串
  */
 function highlightSearchTerm(text, query) {
-  if (!query) return text;
-  const regex = new RegExp(`(${query})`, 'gi');
-  return text.replace(regex, '<span class="highlight">$1</span>');
+  const safeText = escapeHtml(text);
+  if (!query) return safeText;
+  const regex = new RegExp(`(${escapeRegExp(escapeHtml(query))})`, 'gi');
+  return safeText.replace(regex, '<span class="highlight">$1</span>');
 }
 
 // ---------------- 朗读功能 ----------------
@@ -281,7 +299,7 @@ async function fetchAndApplySyncProgress(book) {
           }
         }
       }
-    } else if (response.status !== 200) {
+    } else {
       alert('获取同步进度失败，请检查网络或服务器状态。');
       console.error('获取同步进度失败:', response.statusText);
     }
@@ -344,8 +362,8 @@ function saveReadingProgress() {
     paraIndex: currentParagraphIndex 
   };
   
-  // 保存到数据库（异步，不阻塞朗读流程）
-  saveBook(currentBook).then(() => {
+  // 进度独立存储（异步，不阻塞朗读流程），避免整本书反复写入
+  saveProgress(currentBook.id, currentBook.progress).then(() => {
     localStorage.setItem(META_KEY, JSON.stringify({ lastBookId: currentBook.id }));
 
     // 如果开启了同步，则触发同步
@@ -364,8 +382,7 @@ function saveReadingProgress() {
  * @returns {boolean} 语音合成是否可用
  */
 function isSpeechSynthesisReady() {
-  const voices = window.speechSynthesis.getVoices();
-  return voices.length > 0 && window.speechSynthesis;
+  return Boolean(window.speechSynthesis) && window.speechSynthesis.getVoices().length > 0;
 }
 /**
  * 高亮显示当前朗读的段落
@@ -778,10 +795,13 @@ function updateSpeakButton() {
 function startSpeaking() {
   if (!currentBook) return;
 
-  // 暂停状态下点击：继续播放
+  // 暂停状态下点击：继续播放，并重启看门狗（暂停期间触发后已失效）
   if (isPaused && SUPPORTS_PAUSE) {
     window.speechSynthesis.resume();
     isPaused = false;
+    if (activeChunk) {
+      startWatchdog(activeChunk, speakSessionId);
+    }
     updateSpeakButton();
     return;
   }
@@ -823,9 +843,11 @@ function startSpeaking() {
     return;
   }
 
-  // 已读到结尾时不重复朗读，保持与原有行为一致
+  // 已读到结尾时从头开始朗读，避免按钮看似无响应
   if (currentParagraphIndex >= currentBook.paras.length) {
-    return;
+    currentParagraphIndex = 0;
+    currentPage = 0;
+    renderPage();
   }
 
   // 确保开始前状态干净，并开启新会话
@@ -853,7 +875,7 @@ function toggleFullscreen() {
     document.body.style.removeProperty("overflow");
   } else {
     reader.classList.add('fullscreen');
-    document.body.style.overflow = 'visible';
+    document.body.style.overflow = 'hidden'; // 全屏时禁止背景滚动
   }
 }
 
@@ -937,26 +959,12 @@ async function openBook(book) {
   stopSpeaking();
 
   currentBook = book;
-  
-  // 设置固定页面大小
-  calcPageSize();
-  
-  // 保存上次阅读位置信息，用于后续高亮显示
-  const savedProgress = book.progress;
-  let targetParaIndex = -1;
-  
-  // 恢复阅读进度
-  if (savedProgress && savedProgress.paraIndex !== undefined) {
-    // 基于段落索引计算页面位置
-    currentPage = Math.floor(savedProgress.paraIndex / pageSize);
-    currentParagraphIndex = savedProgress.paraIndex;
-    targetParaIndex = savedProgress.paraIndex;
-  } else {
-    // 使用保存的页面位置或默认第一页
-    currentPage = book.progress?.page || 0;
-    currentParagraphIndex = book.progress?.paraIndex || 0;
-    targetParaIndex = book.progress?.paraIndex || 0;
-  }
+
+  // 恢复阅读进度：优先取独立存储的进度，兼容旧版内嵌在书籍对象中的进度
+  const savedProgress = (await getProgress(book.id)) || book.progress;
+  const targetParaIndex = savedProgress?.paraIndex || 0;
+  currentParagraphIndex = targetParaIndex;
+  currentPage = Math.floor(targetParaIndex / pageSize);
 
   const cleanBookName = getCleanBookName(book);
   document.title = cleanBookName + ' - 小说阅读器';
@@ -974,7 +982,7 @@ async function openBook(book) {
   // 设置媒体会话，用于系统级播放控制
   
   // 延迟高亮上次阅读位置，确保页面渲染完成
-  if (targetParaIndex >= 0 && targetParaIndex < book.paras.length) {
+  if (targetParaIndex < book.paras.length) {
     setTimeout(() => {
       highlightCurrentParagraph(currentParagraphIndex);
     }, 100);
@@ -1008,5 +1016,6 @@ function parseFile(file) {
  */
 async function deleteBookAndNotify(id) {
   await deleteBook(id);
+  await deleteProgress(id);
   window.dispatchEvent(new CustomEvent('bookdeleted'));
 }

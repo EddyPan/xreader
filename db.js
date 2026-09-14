@@ -1,7 +1,8 @@
 const DB_NAME = 'XReaderDB';
-const DB_VERSION = 3; // Increment version to trigger onupgradeneeded
+const DB_VERSION = 4; // Increment version to trigger onupgradeneeded
 const DB_STORE_BOOKS = 'books';
 const DB_STORE_SETTINGS = 'settings';
+const DB_STORE_PROGRESS = 'progress';
 
 let db;
 
@@ -21,6 +22,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains(DB_STORE_SETTINGS)) {
         db.createObjectStore(DB_STORE_SETTINGS, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(DB_STORE_PROGRESS)) {
+        db.createObjectStore(DB_STORE_PROGRESS, { keyPath: 'bookId' });
       }
       const tx = e.target.transaction;
       if (tx.objectStoreNames.contains(DB_STORE_BOOKS)) {
@@ -115,6 +119,52 @@ function getSyncSettings() {
     const tx = db.transaction(DB_STORE_SETTINGS, 'readonly');
     const req = tx.objectStore(DB_STORE_SETTINGS).get('syncSettings');
     req.onsuccess = () => resolve(req.result ? req.result.value : null);
+    req.onerror = e => reject(e);
+  });
+}
+
+/**
+ * 保存阅读进度（独立于书籍存储，避免整本书反复写入）
+ * @param {string} bookId - 书籍ID
+ * @param {Object} progress - 进度对象，包含page和paraIndex
+ * @returns {Promise<void>} 操作完成的Promise
+ */
+function saveProgress(bookId, progress) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE_PROGRESS, 'readwrite');
+    tx.objectStore(DB_STORE_PROGRESS).put({ bookId, ...progress });
+    tx.oncomplete = () => resolve();
+    tx.onerror = e => reject(e);
+  });
+}
+
+/**
+ * 根据书籍ID获取阅读进度
+ * @param {string} bookId - 书籍ID
+ * @returns {Promise<Object|null>} 返回进度对象，如果不存在则返回null
+ */
+function getProgress(bookId) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE_PROGRESS, 'readonly');
+    const req = tx.objectStore(DB_STORE_PROGRESS).get(bookId);
+    req.onsuccess = () => {
+      const r = req.result;
+      resolve(r ? { page: r.page, paraIndex: r.paraIndex } : null);
+    };
+    req.onerror = e => reject(e);
+  });
+}
+
+/**
+ * 删除指定书籍的阅读进度
+ * @param {string} bookId - 书籍ID
+ * @returns {Promise<void>} 删除完成的Promise
+ */
+function deleteProgress(bookId) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE_PROGRESS, 'readwrite');
+    const req = tx.objectStore(DB_STORE_PROGRESS).delete(bookId);
+    req.onsuccess = () => resolve();
     req.onerror = e => reject(e);
   });
 }

@@ -466,6 +466,13 @@ body.dark-mode {
   border-color: #555;
 }
 
+/* #pageInput 为 ID 选择器优先级更高，需单独覆盖边框色 */
+.dark-mode #pageInput {
+  background-color: #333;
+  color: #5f6b7c;
+  border-color: #555;
+}
+
 .dark-mode .highlight {
   background-color: #b3a100;
   color: #121212;
