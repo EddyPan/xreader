@@ -105,6 +105,7 @@ function renderPage(shouldSaveProgress = true) {
       if (currentBook && isSpeaking) {
         // 停止当前朗读，以便从新位置开始
         window.speechSynthesis.cancel();
+        stopKeepAlive();
         isSpeaking = false;
 
         // 设置新的朗读起始位置
@@ -442,25 +443,101 @@ function highlightCurrentParagraph(index) {
 }
 
 /**
- * 预读窗口大小：在当前待播段落之后，额外提前排入语音队列的段落数量
- * 提前入队可让浏览器在上一段结束时无缝续播下一段，消除等 onend 回调再重新发起合成的空档
+ * 每一条语音最多合并的字符数
+ * 把连续多段合并成"一条"语音连续播报，减少 utterance 边界数量，从而消除段间空档
+ * 数值越大段间停顿越少，但单条时长越长、越依赖下方的长文本保活，可按需调整
  */
-const SPEAK_LOOKAHEAD = 1;
+const SPEAK_CHUNK_CHARS = 200;
 
 /**
- * 已排入语音合成队列的最大段落索引
- * 用于朗读过程中持续把后续段落补齐到预读窗口，避免重复入队
+ * 已排入语音队列的最后一段的段落索引
+ * 用于朗读过程中持续预读下一条语音块，避免重复入队
  */
-let lastQueuedParagraphIndex = -1;
+let queuedChunkEndPara = -1;
 
 /**
- * 将指定段落排入语音合成队列（预读机制核心）
- * @param {number} index - 要排入队列的段落索引
+ * 是否为 Android 平台：Android 上 pause() 实际会 cancel() 掉朗读，需跳过保活逻辑
  */
-function enqueueParagraph(index) {
-  if (!currentBook || index < 0 || index >= currentBook.paras.length) return;
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
 
-  const u = new SpeechSynthesisUtterance(currentBook.paras[index]);
+let keepAliveTimer = null;
+
+/**
+ * 启动长文本保活
+ * Chrome 桌面版连续朗读约 15 秒后会自动中断，通过周期性 pause/resume 规避
+ */
+function startKeepAlive() {
+  if (IS_ANDROID) return;
+  stopKeepAlive();
+  keepAliveTimer = setInterval(() => {
+    if (isSpeaking && window.speechSynthesis.speaking) {
+      window.speechSynthesis.pause();
+      window.speechSynthesis.resume();
+    }
+  }, 10000);
+}
+
+/**
+ * 停止长文本保活
+ */
+function stopKeepAlive() {
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+}
+
+/**
+ * 从指定段落开始，向后合并若干段，构建一条用于连续朗读的文本
+ * @param {number} startIndex - 起始段落索引
+ * @returns {{text: string, startIndex: number, endIndex: number, offsets: Array<{charIndex: number, paraIndex: number}>}}
+ */
+function buildSpeakChunk(startIndex) {
+  const paras = currentBook.paras;
+  const parts = [];
+  const offsets = [];
+  let pos = 0;
+  let i = startIndex;
+
+  // 段落之间用换行分隔，既保留自然停顿，又便于把字符位置映射回段落
+  while (i < paras.length && (parts.length === 0 || pos + paras[i].length <= SPEAK_CHUNK_CHARS)) {
+    offsets.push({ charIndex: pos, paraIndex: i });
+    parts.push(paras[i]);
+    pos += paras[i].length + 1; // +1 为分隔符长度
+    i++;
+  }
+
+  return { text: parts.join('\n'), startIndex, endIndex: i - 1, offsets };
+}
+
+/**
+ * 根据朗读到的字符位置定位所属段落
+ * @param {Object} chunk - 语音块
+ * @param {number} charIndex - onboundary 事件给出的字符位置
+ * @returns {number} 段落索引
+ */
+function resolveParaIndex(chunk, charIndex) {
+  let result = chunk.startIndex;
+  for (const o of chunk.offsets) {
+    if (o.charIndex <= charIndex) {
+      result = o.paraIndex;
+    } else {
+      break;
+    }
+  }
+  return result;
+}
+
+/**
+ * 入队一条语音块
+ * 多条合并后播报，段间不再有合成启动空档；由 onboundary 驱动段落级高亮与进度
+ * @param {number} startIndex - 该语音块的起始段落索引
+ */
+function enqueueChunk(startIndex) {
+  if (!currentBook || startIndex < 0 || startIndex >= currentBook.paras.length) return;
+
+  const chunk = buildSpeakChunk(startIndex);
+  const u = new SpeechSynthesisUtterance(chunk.text);
   u.rate = parseFloat(document.getElementById('rate').value);
   if (selectedVoice) {
     u.voice = selectedVoice;
@@ -468,52 +545,54 @@ function enqueueParagraph(index) {
 
   u.onstart = () => {
     if (!isSpeaking) return;
-    // 段落真正开始播放时才更新进度与高亮，避免阻塞后续入队
-    currentParagraphIndex = index;
+    currentParagraphIndex = chunk.startIndex;
+    highlightCurrentParagraph(chunk.startIndex);
     saveReadingProgress();
-    highlightCurrentParagraph(index);
-    // 播放期间把后续段落补齐到预读窗口
-    enqueueLookahead(index);
+    startKeepAlive();
+    // 播放期间补齐下一条语音块，保证队列不断档
+    if (queuedChunkEndPara <= chunk.endIndex && queuedChunkEndPara < currentBook.paras.length - 1) {
+      enqueueChunk(queuedChunkEndPara + 1);
+    }
+  };
+
+  u.onboundary = (e) => {
+    if (!isSpeaking) return;
+    const paraIndex = resolveParaIndex(chunk, e.charIndex);
+    if (paraIndex !== currentParagraphIndex) {
+      currentParagraphIndex = paraIndex;
+      highlightCurrentParagraph(paraIndex);
+      saveReadingProgress();
+    }
   };
 
   u.onend = () => {
+    if (!isSpeaking) return;
     // 最后一段播放结束，收尾
-    if (isSpeaking && index >= currentBook.paras.length - 1) {
+    if (chunk.endIndex >= currentBook.paras.length - 1) {
       finishSpeaking();
     }
   };
 
   u.onerror = () => {
     if (!isSpeaking) return;
-    // 单段合成失败时继续推进队列，避免朗读卡死
-    if (index >= currentBook.paras.length - 1) {
+    // 单条合成失败时继续推进队列，避免朗读卡死
+    if (chunk.endIndex >= currentBook.paras.length - 1) {
       finishSpeaking();
-    } else {
-      enqueueLookahead(index + 1);
+    } else if (queuedChunkEndPara <= chunk.endIndex) {
+      enqueueChunk(queuedChunkEndPara + 1);
     }
   };
 
-  lastQueuedParagraphIndex = Math.max(lastQueuedParagraphIndex, index);
+  queuedChunkEndPara = Math.max(queuedChunkEndPara, chunk.endIndex);
   window.speechSynthesis.speak(u);
 }
 
 /**
- * 从指定段落之后补齐预读窗口，确保队列中始终有下一段待播
- * @param {number} fromIndex - 基准段落索引
- */
-function enqueueLookahead(fromIndex) {
-  if (!currentBook) return;
-  const limit = Math.min(fromIndex + SPEAK_LOOKAHEAD, currentBook.paras.length - 1);
-  for (let i = lastQueuedParagraphIndex + 1; i <= limit; i++) {
-    enqueueParagraph(i);
-  }
-}
-
-/**
- * 朗读自然结束时的收尾：复位状态、保存进度、清除高亮
+ * 朗读自然结束时的收尾：复位状态、保存进度、清除高亮、停止保活
  */
 function finishSpeaking() {
   isSpeaking = false;
+  stopKeepAlive();
   currentParagraphIndex = currentBook.paras.length;
   saveReadingProgress();
 
@@ -555,6 +634,7 @@ function startSpeaking() {
   // 如果语音正在活动（包括朗读或暂停状态），则停止
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
+    stopKeepAlive();
     isSpeaking = false;
     saveReadingProgress(); // 停止时保存进度
     updateSpeakButton();
@@ -596,10 +676,12 @@ function startSpeaking() {
   isSpeaking = true;
   updateSpeakButton();
 
-  // 入队当前段落并预读后续段落，让浏览器队列无缝续播，减少跨段空档
-  lastQueuedParagraphIndex = currentParagraphIndex - 1;
-  enqueueParagraph(currentParagraphIndex);
-  enqueueLookahead(currentParagraphIndex);
+  // 入队当前语音块并预读下一条，合并多段连续播报，减少跨段空档
+  queuedChunkEndPara = currentParagraphIndex - 1;
+  enqueueChunk(currentParagraphIndex);
+  if (queuedChunkEndPara < currentBook.paras.length - 1) {
+    enqueueChunk(queuedChunkEndPara + 1);
+  }
 }
 
 /**
@@ -695,6 +777,7 @@ function getCleanBookName(book) {
 async function openBook(book) {
   // 清理之前的朗读状态
   window.speechSynthesis.cancel();
+  stopKeepAlive();
   isSpeaking = false;
   
   currentBook = book;
