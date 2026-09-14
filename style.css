@@ -192,6 +192,32 @@ button:hover {
   border-top: 1px solid #eee;
 }
 
+.page-jump {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#pageInput {
+  width: 60px;
+  padding: 2px 6px;
+  text-align: center;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+/* 隐藏 number 输入框的上下箭头，保持简洁 */
+#pageInput::-webkit-outer-spin-button,
+#pageInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#pageInput {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Fullscreen */
 .reader-wrap.fullscreen {
   position: fixed;
@@ -452,6 +478,53 @@ body.dark-mode {
 .dark-mode .dropzone.dragover {
   background-color: #333;
   border-color: #777;
+}
+
+/* --- Custom Scrollbar (Desktop) --- */
+/* Firefox */
+.viewport,
+.list {
+  scrollbar-width: thin;
+  scrollbar-color: #c7c7c7 transparent;
+}
+
+/* WebKit: Chrome / Edge / Safari */
+.viewport::-webkit-scrollbar,
+.list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.viewport::-webkit-scrollbar-track,
+.list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.viewport::-webkit-scrollbar-thumb,
+.list::-webkit-scrollbar-thumb {
+  background: #c7c7c7;
+  border-radius: 3px;
+}
+
+.viewport::-webkit-scrollbar-thumb:hover,
+.list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 夜间模式 */
+.dark-mode .viewport,
+.dark-mode .list {
+  scrollbar-color: #555 transparent;
+}
+
+.dark-mode .viewport::-webkit-scrollbar-thumb,
+.dark-mode .list::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+.dark-mode .viewport::-webkit-scrollbar-thumb:hover,
+.dark-mode .list::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 
 /* --- Page Turn Animation --- */

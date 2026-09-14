@@ -91,10 +91,14 @@ function renderPage(shouldSaveProgress = true) {
   // 翻页后，重置滚动条到顶部
   viewport.scrollTop = 0;
 
-  // 更新页码显示，确保总页数计算准确
+  // 更新页码显示，确保总页数计算准确；输入框聚焦时不覆盖用户正在输入的内容
   const totalPages = Math.ceil(paras.length / pageSize);
-  document.getElementById('pageLabel').textContent =
-    `第 ${currentPage + 1} / ${totalPages} 页`;
+  const pageInput = document.getElementById('pageInput');
+  if (pageInput && document.activeElement !== pageInput) {
+    pageInput.value = currentPage + 1;
+    pageInput.max = totalPages;
+  }
+  document.getElementById('pageTotal').textContent = totalPages;
 
   const progress = Math.floor((end / paras.length) * 100);
   document.getElementById('bookProgress').textContent = `进度：${progress}%`;

@@ -195,6 +195,29 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnPagePrev').onclick = prevPage;
   document.getElementById('btnPageNext').onclick = nextPage;
 
+  // 快速翻页：输入页码回车直接跳转
+  const pageInput = document.getElementById('pageInput');
+  pageInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !currentBook) return;
+    const totalPages = Math.ceil(currentBook.paras.length / pageSize);
+    const page = parseInt(pageInput.value, 10);
+    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+      currentPage = page - 1;
+      renderPage(!isSpeaking);
+      pageInput.blur();
+    } else {
+      alert(`页码无效，请输入 1 - ${totalPages} 之间的数字`);
+      pageInput.value = currentPage + 1;
+    }
+  });
+
+  // 失焦时若未跳转，恢复显示当前页码
+  pageInput.addEventListener('blur', () => {
+    if (currentBook) {
+      pageInput.value = currentPage + 1;
+    }
+  });
+
   // 朗读
   document.getElementById('btnSpeak').onclick = startSpeaking;
 
