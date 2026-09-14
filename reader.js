@@ -5,7 +5,6 @@ let currentBook = null;   // 当前书
 let currentPage = 0;      // 当前页码
 let pageSize = 20;        // 每页段落数
 let isSpeaking = false;   // 是否正在朗读
-let utterance = null;     // 当前朗读对象
 let currentParagraphIndex = 0; // 朗读到的段落索引
 let voices = [];          // 可用音色列表
 let selectedVoice = null; // 当前选择的音色
@@ -443,65 +442,88 @@ function highlightCurrentParagraph(index) {
 }
 
 /**
- * 朗读下一段文本
- * 创建语音合成对象，设置语速和音色
- * 自动翻页并继续朗读下一段，直到文本结束
- * 实时保存朗读进度到数据库并高亮当前段落
+ * 预读窗口大小：在当前待播段落之后，额外提前排入语音队列的段落数量
+ * 提前入队可让浏览器在上一段结束时无缝续播下一段，消除等 onend 回调再重新发起合成的空档
  */
-function speakNextParagraph() {
-  if (!currentBook) return;
+const SPEAK_LOOKAHEAD = 1;
 
-  const paras = currentBook.paras;
-  if (currentParagraphIndex >= paras.length) {
-    isSpeaking = false;
-    // 朗读完成时保存最终进度
-    saveReadingProgress();
-    // 清除高亮
-    const viewport = document.getElementById('viewport');
-    const prevHighlighted = viewport.querySelector('.speaking-paragraph');
-    if (prevHighlighted) {
-      prevHighlighted.classList.remove('speaking-paragraph');
-    }
-    return;
-  }
+/**
+ * 已排入语音合成队列的最大段落索引
+ * 用于朗读过程中持续把后续段落补齐到预读窗口，避免重复入队
+ */
+let lastQueuedParagraphIndex = -1;
 
-  const text = paras[currentParagraphIndex];
-  utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = parseFloat(document.getElementById('rate').value);
+/**
+ * 将指定段落排入语音合成队列（预读机制核心）
+ * @param {number} index - 要排入队列的段落索引
+ */
+function enqueueParagraph(index) {
+  if (!currentBook || index < 0 || index >= currentBook.paras.length) return;
 
+  const u = new SpeechSynthesisUtterance(currentBook.paras[index]);
+  u.rate = parseFloat(document.getElementById('rate').value);
   if (selectedVoice) {
-    utterance.voice = selectedVoice;
+    u.voice = selectedVoice;
   }
 
-  utterance.onstart = () => {
-    // 开始朗读时高亮当前段落
-    highlightCurrentParagraph(currentParagraphIndex);
+  u.onstart = () => {
+    if (!isSpeaking) return;
+    // 段落真正开始播放时才更新进度与高亮，避免阻塞后续入队
+    currentParagraphIndex = index;
+    saveReadingProgress();
+    highlightCurrentParagraph(index);
+    // 播放期间把后续段落补齐到预读窗口
+    enqueueLookahead(index);
   };
 
-  utterance.onend = () => {
-    currentParagraphIndex++;
-    const pageIndex = Math.floor(currentParagraphIndex / pageSize);
-    if (pageIndex !== currentPage) {
-      currentPage = pageIndex;
-      renderPage();
-    } else {
-      // 在同一页内只保存进度，不重新渲染页面
-      saveReadingProgress();
-    }
-    
-    if (isSpeaking) {
-      speakNextParagraph();
-    } else {
-      updateSpeakButton();
+  u.onend = () => {
+    // 最后一段播放结束，收尾
+    if (isSpeaking && index >= currentBook.paras.length - 1) {
+      finishSpeaking();
     }
   };
 
-  // 开始朗读时保存进度和高亮
+  u.onerror = () => {
+    if (!isSpeaking) return;
+    // 单段合成失败时继续推进队列，避免朗读卡死
+    if (index >= currentBook.paras.length - 1) {
+      finishSpeaking();
+    } else {
+      enqueueLookahead(index + 1);
+    }
+  };
+
+  lastQueuedParagraphIndex = Math.max(lastQueuedParagraphIndex, index);
+  window.speechSynthesis.speak(u);
+}
+
+/**
+ * 从指定段落之后补齐预读窗口，确保队列中始终有下一段待播
+ * @param {number} fromIndex - 基准段落索引
+ */
+function enqueueLookahead(fromIndex) {
+  if (!currentBook) return;
+  const limit = Math.min(fromIndex + SPEAK_LOOKAHEAD, currentBook.paras.length - 1);
+  for (let i = lastQueuedParagraphIndex + 1; i <= limit; i++) {
+    enqueueParagraph(i);
+  }
+}
+
+/**
+ * 朗读自然结束时的收尾：复位状态、保存进度、清除高亮
+ */
+function finishSpeaking() {
+  isSpeaking = false;
+  currentParagraphIndex = currentBook.paras.length;
   saveReadingProgress();
-  highlightCurrentParagraph(currentParagraphIndex);
-  
-  isSpeaking = true;
-  window.speechSynthesis.speak(utterance);
+
+  const viewport = document.getElementById('viewport');
+  const prevHighlighted = viewport.querySelector('.speaking-paragraph');
+  if (prevHighlighted) {
+    prevHighlighted.classList.remove('speaking-paragraph');
+  }
+
+  updateSpeakButton();
 }
 
 /**
@@ -562,6 +584,11 @@ function startSpeaking() {
     return;
   }
    
+  // 已读到结尾时不重复朗读，保持与原有行为一致
+  if (currentParagraphIndex >= currentBook.paras.length) {
+    return;
+  }
+
   // 确保开始前状态干净
   window.speechSynthesis.cancel();
    
@@ -569,10 +596,10 @@ function startSpeaking() {
   isSpeaking = true;
   updateSpeakButton();
 
-  // Directly call speakNextParagraph without delay
-  if (isSpeaking) {
-    speakNextParagraph();
-  }
+  // 入队当前段落并预读后续段落，让浏览器队列无缝续播，减少跨段空档
+  lastQueuedParagraphIndex = currentParagraphIndex - 1;
+  enqueueParagraph(currentParagraphIndex);
+  enqueueLookahead(currentParagraphIndex);
 }
 
 /**
