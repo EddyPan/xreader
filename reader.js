@@ -24,46 +24,13 @@ function splitTextToParas(text) {
   let normalizedText = text
     .replace(/\r\n/g, '\n')  // Windows换行符
     .replace(/\r/g, '\n');   // Mac换行符
-  
+
   // 第二步：按回车分割，每个回车都作为段落边界
-  let paragraphs = normalizedText.split('\n');
-  
-  // 第三步：清理和过滤段落
-  paragraphs = paragraphs
-    .map(paragraph => {
-      // 移除段落前后的空白字符
-      paragraph = paragraph.trim();
-      
-      // 移除段落内部的多个连续空格，保留一个
-      paragraph = paragraph.replace(/\s+/g, ' ');
-      
-      return paragraph;
-    })
-    .filter(paragraph => {
-      // 过滤掉空段落（包括只有空格、制表符的段落）
-      return paragraph.length > 0;
-    });
-  
-  // 第四步：进一步处理特殊情况
-  // 如果段落以句号、问号、感叹号结尾，且长度超过一定阈值，认为是完整段落
-  paragraphs = paragraphs.map(paragraph => {
-    // 如果段落太短（少于10个字符），考虑与下一段合并
-    if (paragraph.length < 10 && paragraphs.indexOf(paragraph) < paragraphs.length - 1) {
-      const nextIndex = paragraphs.indexOf(paragraph) + 1;
-      if (nextIndex < paragraphs.length) {
-        // 检查当前段落是否以标点符号结尾
-        const endsWithPunctuation = /[。！？.!?]$/.test(paragraph);
-        if (!endsWithPunctuation) {
-          // 不与下一段合并，保持独立段落
-          return paragraph;
-        }
-      }
-    }
-    return paragraph;
-  });
-  
-  // 重新过滤，确保没有空段落
-  return paragraphs.filter(paragraph => paragraph.length > 0);
+  // 第三步：清理和过滤段落（去首尾空白、压缩连续空格、过滤空段落）
+  return normalizedText
+    .split('\n')
+    .map(paragraph => paragraph.trim().replace(/\s+/g, ' '))
+    .filter(paragraph => paragraph.length > 0);
 }
 
 
@@ -104,13 +71,11 @@ function renderPage(shouldSaveProgress = true) {
       e.stopPropagation(); // 阻止事件冒泡，防止触发viewport的翻页事件
       if (currentBook && isSpeaking) {
         // 停止当前朗读，以便从新位置开始
-        window.speechSynthesis.cancel();
-        stopKeepAlive();
-        isSpeaking = false;
+        stopSpeaking();
 
         // 设置新的朗读起始位置
         currentParagraphIndex = i;
-        
+
         // 调用通用的朗读函数，由它来处理所有状态
         startSpeaking();
       } else if (currentBook) {
@@ -148,8 +113,8 @@ function renderPage(shouldSaveProgress = true) {
     });
   }
   
-  // 如果在朗读中，重新高亮当前段落
-  if (isSpeaking && currentParagraphIndex >= start && currentParagraphIndex < end) {
+  // 当前段落落在本页时保持高亮（朗读中或点击选中后翻页都适用）
+  if (currentParagraphIndex >= start && currentParagraphIndex < end) {
     highlightCurrentParagraph(currentParagraphIndex);
   }
 }
@@ -442,6 +407,28 @@ function highlightCurrentParagraph(index) {
   }
 }
 
+// ---------------- 朗读状态与配置 ----------------
+
+/**
+ * 是否为 Android 平台：Android 上 pause() 实际会 cancel() 掉朗读，需跳过保活与暂停逻辑
+ */
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
+/**
+ * 是否支持真正的暂停/续播（桌面浏览器支持，Android 不支持）
+ */
+const SUPPORTS_PAUSE = !IS_ANDROID;
+
+/**
+ * 是否支持 onboundary 事件（驱动段落级高亮；部分平台/音色不触发，需时间估算兜底）
+ */
+const SUPPORTS_BOUNDARY = !IS_ANDROID;
+
+/**
+ * 队列中最多保留的语音块数量：当前在播块 + 预读块，双块预读压缩块间空档
+ */
+const MAX_SPEAK_QUEUE = 2;
+
 /**
  * 每一条语音最多合并的字符数
  * 把连续多段合并成"一条"语音连续播报，减少 utterance 边界数量，从而消除段间空档
@@ -449,18 +436,19 @@ function highlightCurrentParagraph(index) {
  */
 const SPEAK_CHUNK_CHARS = 200;
 
+let isPaused = false;            // 是否处于暂停状态
+let activeChunk = null;          // 当前正在播放的语音块
+let speakSessionId = 0;          // 朗读会话标识，防止旧定时器污染新会话
+let boundaryTimer = null;        // onboundary 兜底定时器
+let boundaryTickIndex = -1;      // 兜底模式下已处理到的段落下标
+let keepAliveTimer = null;       // Chrome 长文本保活定时器
+let watchdogTimer = null;        // 语音块播放看门狗
+
 /**
  * 已排入语音队列的最后一段的段落索引
  * 用于朗读过程中持续预读下一条语音块，避免重复入队
  */
 let queuedChunkEndPara = -1;
-
-/**
- * 是否为 Android 平台：Android 上 pause() 实际会 cancel() 掉朗读，需跳过保活逻辑
- */
-const IS_ANDROID = /Android/i.test(navigator.userAgent);
-
-let keepAliveTimer = null;
 
 /**
  * 启动长文本保活
@@ -470,7 +458,8 @@ function startKeepAlive() {
   if (IS_ANDROID) return;
   stopKeepAlive();
   keepAliveTimer = setInterval(() => {
-    if (isSpeaking && window.speechSynthesis.speaking) {
+    // 暂停状态下不续播，避免被保活打断
+    if (isSpeaking && !isPaused && window.speechSynthesis.speaking) {
       window.speechSynthesis.pause();
       window.speechSynthesis.resume();
     }
@@ -485,6 +474,103 @@ function stopKeepAlive() {
     clearInterval(keepAliveTimer);
     keepAliveTimer = null;
   }
+}
+
+/**
+ * 估算语速对应的每秒字符数（粗略值，用于时间兜底与看门狗）
+ * @returns {number} 每秒约朗读的字符数
+ */
+function getCharsPerSecond() {
+  const rate = parseFloat(document.getElementById('rate').value) || 1.0;
+  return 5.0 * rate;
+}
+
+/**
+ * 停止 onboundary 时间兜底定时器
+ */
+function stopBoundaryFallback() {
+  if (boundaryTimer) {
+    clearTimeout(boundaryTimer);
+    boundaryTimer = null;
+  }
+}
+
+/**
+ * 按段落进入当前语音块的顺序，依次调度高亮推进
+ * @param {Object} chunk - 语音块
+ * @param {number} sessionId - 会话标识
+ * @param {number} offsetIndex - chunk.offsets 中的下标
+ */
+function scheduleParagraphTick(chunk, sessionId, offsetIndex) {
+  const o = chunk.offsets[offsetIndex];
+  const paraIndex = o.paraIndex;
+
+  // 段落变化时更新高亮与进度
+  if (paraIndex !== currentParagraphIndex) {
+    currentParagraphIndex = paraIndex;
+    highlightCurrentParagraph(paraIndex);
+    saveReadingProgress();
+  }
+
+  boundaryTickIndex = offsetIndex;
+  const nextIndex = offsetIndex + 1;
+  if (nextIndex >= chunk.offsets.length) return;
+
+  const nextO = chunk.offsets[nextIndex];
+  const chars = nextO.charIndex - o.charIndex;
+  const delay = Math.max(120, (chars / getCharsPerSecond()) * 1000);
+  boundaryTimer = setTimeout(() => {
+    if (isSpeaking && !isPaused && activeChunk === chunk && speakSessionId === sessionId) {
+      scheduleParagraphTick(chunk, sessionId, nextIndex);
+    }
+  }, delay);
+}
+
+/**
+ * 启动 onboundary 兜底：先短延迟探测事件是否可用，不可用则按时间估算推进高亮
+ * @param {Object} chunk - 当前语音块
+ * @param {number} sessionId - 会话标识
+ */
+function startBoundaryFallback(chunk, sessionId) {
+  stopBoundaryFallback();
+  boundaryTickIndex = -1;
+  if (SUPPORTS_BOUNDARY) return;
+  if (!chunk || chunk.offsets.length <= 1) return;
+
+  // 给真实 onboundary 一个优先机会；若 400ms 内没触发，则按时间估算推进
+  boundaryTimer = setTimeout(() => {
+    if (boundaryTickIndex >= 0) return;
+    if (isSpeaking && !isPaused && activeChunk === chunk && speakSessionId === sessionId) {
+      scheduleParagraphTick(chunk, sessionId, 0);
+    }
+  }, 400);
+}
+
+/**
+ * 暂停看门狗定时器
+ */
+function stopWatchdog() {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+/**
+ * 为当前语音块启动看门狗：在预估时长 + 宽限内若无 onend，强制跳下一块，防止卡死
+ * @param {Object} chunk - 当前语音块
+ * @param {number} sessionId - 会话标识
+ */
+function startWatchdog(chunk, sessionId) {
+  stopWatchdog();
+  const estimated = (chunk.text.length / getCharsPerSecond()) * 1000;
+  const timeout = estimated + 4000;
+  watchdogTimer = setTimeout(() => {
+    if (isSpeaking && !isPaused && activeChunk === chunk && speakSessionId === sessionId) {
+      console.warn('语音块超时未结束，强制跳下一块');
+      advanceAfterChunk(chunk);
+    }
+  }, timeout);
 }
 
 /**
@@ -529,6 +615,38 @@ function resolveParaIndex(chunk, charIndex) {
 }
 
 /**
+ * 补齐语音队列，使队列中始终保持 MAX_SPEAK_QUEUE 条语音块
+ * @param {Object} currentChunk - 当前正在播放的语音块
+ */
+function ensureQueue(currentChunk) {
+  if (!currentBook) return;
+  let enqueued = Math.max(0, queuedChunkEndPara - currentChunk.endIndex);
+  while (enqueued < MAX_SPEAK_QUEUE && queuedChunkEndPara < currentBook.paras.length - 1) {
+    enqueueChunk(queuedChunkEndPara + 1);
+    enqueued++;
+  }
+}
+
+/**
+ * 当前语音块结束/出错后的通用推进逻辑：停止看门狗与兜底，播放下一块或收尾
+ * @param {Object} chunk - 刚结束或出错的语音块
+ */
+function advanceAfterChunk(chunk) {
+  stopWatchdog();
+  stopBoundaryFallback();
+
+  if (chunk.endIndex >= currentBook.paras.length - 1) {
+    finishSpeaking();
+    return;
+  }
+
+  // 队列里已有下一块时浏览器会自动续播；否则补入队
+  if (queuedChunkEndPara <= chunk.endIndex) {
+    enqueueChunk(chunk.endIndex + 1);
+  }
+}
+
+/**
  * 入队一条语音块
  * 多条合并后播报，段间不再有合成启动空档；由 onboundary 驱动段落级高亮与进度
  * @param {number} startIndex - 该语音块的起始段落索引
@@ -545,18 +663,20 @@ function enqueueChunk(startIndex) {
 
   u.onstart = () => {
     if (!isSpeaking) return;
+    activeChunk = chunk;
     currentParagraphIndex = chunk.startIndex;
     highlightCurrentParagraph(chunk.startIndex);
     saveReadingProgress();
     startKeepAlive();
-    // 播放期间补齐下一条语音块，保证队列不断档
-    if (queuedChunkEndPara <= chunk.endIndex && queuedChunkEndPara < currentBook.paras.length - 1) {
-      enqueueChunk(queuedChunkEndPara + 1);
-    }
+    startBoundaryFallback(chunk, speakSessionId);
+    startWatchdog(chunk, speakSessionId);
+    // 播放期间把队列补齐到 MAX_SPEAK_QUEUE 块，保证块间无缝
+    ensureQueue(chunk);
   };
 
   u.onboundary = (e) => {
     if (!isSpeaking) return;
+    boundaryTickIndex = 0; // 标记真实 onboundary 已生效，停止时间兜底
     const paraIndex = resolveParaIndex(chunk, e.charIndex);
     if (paraIndex !== currentParagraphIndex) {
       currentParagraphIndex = paraIndex;
@@ -567,20 +687,14 @@ function enqueueChunk(startIndex) {
 
   u.onend = () => {
     if (!isSpeaking) return;
-    // 最后一段播放结束，收尾
-    if (chunk.endIndex >= currentBook.paras.length - 1) {
-      finishSpeaking();
-    }
+    advanceAfterChunk(chunk);
   };
 
-  u.onerror = () => {
+  u.onerror = (e) => {
     if (!isSpeaking) return;
-    // 单条合成失败时继续推进队列，避免朗读卡死
-    if (chunk.endIndex >= currentBook.paras.length - 1) {
-      finishSpeaking();
-    } else if (queuedChunkEndPara <= chunk.endIndex) {
-      enqueueChunk(queuedChunkEndPara + 1);
-    }
+    console.warn('语音块播放出错:', e && e.error);
+    // 无论何种错误都继续推进队列，避免朗读卡死
+    advanceAfterChunk(chunk);
   };
 
   queuedChunkEndPara = Math.max(queuedChunkEndPara, chunk.endIndex);
@@ -588,11 +702,31 @@ function enqueueChunk(startIndex) {
 }
 
 /**
+ * 停止朗读并复位所有状态与定时器
+ */
+function stopSpeaking() {
+  speakSessionId++;
+  window.speechSynthesis.cancel();
+  stopKeepAlive();
+  stopBoundaryFallback();
+  stopWatchdog();
+  activeChunk = null;
+  isSpeaking = false;
+  isPaused = false;
+  saveReadingProgress();
+  updateSpeakButton();
+}
+
+/**
  * 朗读自然结束时的收尾：复位状态、保存进度、清除高亮、停止保活
  */
 function finishSpeaking() {
   isSpeaking = false;
+  isPaused = false;
+  activeChunk = null;
   stopKeepAlive();
+  stopBoundaryFallback();
+  stopWatchdog();
   currentParagraphIndex = currentBook.paras.length;
   saveReadingProgress();
 
@@ -605,39 +739,60 @@ function finishSpeaking() {
   updateSpeakButton();
 }
 
+let btnSpeakEl = null;
+let speechControlsEl = null;
+
 /**
  * 更新朗读按钮的显示状态
- * 根据isSpeaking状态更新按钮文字和样式，同时控制音频控制元素的显示
+ * 根据isSpeaking/isPaused状态更新按钮文字和样式，同时控制音频控制元素的显示
  */
 function updateSpeakButton() {
-  const btnSpeak = document.getElementById('btnSpeak');
-  const speechControls = document.querySelector('.speech-controls');
-  
-  if (isSpeaking) {
-    btnSpeak.textContent = '暂停';
-    btnSpeak.classList.add('speaking');
-    speechControls.classList.add('speaking');
+  if (!btnSpeakEl) {
+    btnSpeakEl = document.getElementById('btnSpeak');
+    speechControlsEl = document.querySelector('.speech-controls');
+  }
+
+  if (isPaused) {
+    btnSpeakEl.textContent = '继续';
+    btnSpeakEl.classList.add('speaking');
+    speechControlsEl.classList.add('speaking');
+  } else if (isSpeaking) {
+    btnSpeakEl.textContent = '暂停';
+    btnSpeakEl.classList.add('speaking');
+    speechControlsEl.classList.add('speaking');
   } else {
-    btnSpeak.textContent = '朗读';
-    btnSpeak.classList.remove('speaking');
-    speechControls.classList.remove('speaking');
+    btnSpeakEl.textContent = '朗读';
+    btnSpeakEl.classList.remove('speaking');
+    speechControlsEl.classList.remove('speaking');
   }
 }
 
 /**
- * 开始或停止朗读功能
- * 如果在朗读，则停止；如果已停止，则开始朗读。
+ * 开始/暂停/继续朗读
+ * 桌面浏览器支持真正的暂停/续播；Android 上 pause 会中断朗读，降级为停止/重新开始
  */
 function startSpeaking() {
   if (!currentBook) return;
 
-  // 如果语音正在活动（包括朗读或暂停状态），则停止
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-    stopKeepAlive();
-    isSpeaking = false;
-    saveReadingProgress(); // 停止时保存进度
+  // 暂停状态下点击：继续播放
+  if (isPaused && SUPPORTS_PAUSE) {
+    window.speechSynthesis.resume();
+    isPaused = false;
     updateSpeakButton();
+    return;
+  }
+
+  // 正在朗读且支持暂停：暂停
+  if (window.speechSynthesis.speaking && !isPaused && SUPPORTS_PAUSE) {
+    window.speechSynthesis.pause();
+    isPaused = true;
+    updateSpeakButton();
+    return;
+  }
+
+  // 正在朗读但不支持暂停（Android）：停止
+  if (window.speechSynthesis.speaking) {
+    stopSpeaking();
     return;
   }
 
@@ -663,25 +818,24 @@ function startSpeaking() {
     }, 500);
     return;
   }
-   
+
   // 已读到结尾时不重复朗读，保持与原有行为一致
   if (currentParagraphIndex >= currentBook.paras.length) {
     return;
   }
 
-  // 确保开始前状态干净
-  window.speechSynthesis.cancel();
-   
+  // 确保开始前状态干净，并开启新会话
+  stopSpeaking();
+
   // 设置为朗读状态
   isSpeaking = true;
+  isPaused = false;
   updateSpeakButton();
 
   // 入队当前语音块并预读下一条，合并多段连续播报，减少跨段空档
   queuedChunkEndPara = currentParagraphIndex - 1;
   enqueueChunk(currentParagraphIndex);
-  if (queuedChunkEndPara < currentBook.paras.length - 1) {
-    enqueueChunk(queuedChunkEndPara + 1);
-  }
+  ensureQueue({ endIndex: queuedChunkEndPara });
 }
 
 /**
@@ -776,10 +930,8 @@ function getCleanBookName(book) {
  */
 async function openBook(book) {
   // 清理之前的朗读状态
-  window.speechSynthesis.cancel();
-  stopKeepAlive();
-  isSpeaking = false;
-  
+  stopSpeaking();
+
   currentBook = book;
   
   // 设置固定页面大小
